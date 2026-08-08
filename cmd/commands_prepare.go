@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -10,6 +11,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/jamesonstone/rungrid/internal/generate"
 	"github.com/jamesonstone/rungrid/internal/lifecycle"
+	"github.com/jamesonstone/rungrid/internal/maintenance"
 	"github.com/jamesonstone/rungrid/internal/output"
 	"github.com/jamesonstone/rungrid/internal/planner"
 	"github.com/jamesonstone/rungrid/internal/state"
@@ -120,7 +122,7 @@ func newGenerateCommand(opt *options) *cobra.Command {
 }
 
 func newUpCommand(opt *options) *cobra.Command {
-	var headless, noOpen bool
+	var headless, noOpen, doSync bool
 	command := &cobra.Command{
 		Use:   "up [service ...]",
 		Short: "Generate and start the detached workspace",
@@ -130,6 +132,46 @@ func newUpCommand(opt *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			// If requested, fast-forward configured repositories before starting
+			if doSync {
+				// Prepare a cancellable context for sync (respect signals)
+				syncCtx, stopSignals := signal.NotifyContext(command.Context(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
+				defer stopSignals()
+				active, hasActive, err := optionalActive(syncCtx, loaded, opt.stateDir)
+				if err != nil {
+					return err
+				}
+				if hasActive {
+					result, runErr := lifecycle.StartMaintenanceJob(syncCtx, active, maintenance.OperationSync, nil)
+					if len(result.Data) == 0 {
+						return runErr
+					}
+					report, decodeErr := lifecycle.DecodeSyncJob(result)
+					if writeErr := writeSyncReport(command, opt, loaded.Manifest.Project.ID, report); writeErr != nil {
+						return errors.Join(runErr, decodeErr, writeErr)
+					}
+				} else {
+					lock, err := acquireMaintenanceLock(syncCtx, loaded, opt.stateDir)
+					if err != nil {
+						return err
+					}
+					coordinator := maintenance.Coordinator(maintenance.NoopCoordinator{})
+					if hasActive {
+						coordinator = lifecycle.NewMaintenanceCoordinator(active)
+					}
+					report, runErr := maintenance.Sync(syncCtx, loaded, maintenance.Options{Repositories: nil, DryRun: false}, nil, coordinator)
+					writeErr := writeSyncReport(command, opt, loaded.Manifest.Project.ID, report)
+					var releaseErr error
+					if lock != nil {
+						releaseErr = lock.Release()
+					}
+					if err := errors.Join(runErr, writeErr, releaseErr); err != nil {
+						return err
+					}
+				}
+			}
+
 			open := loaded.Manifest.Terminal.Open != nil && *loaded.Manifest.Terminal.Open && !noOpen
 			ctx, cancel := signal.NotifyContext(command.Context(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 			defer cancel()
@@ -150,5 +192,6 @@ func newUpCommand(opt *options) *cobra.Command {
 	}
 	command.Flags().BoolVar(&headless, "headless", false, "do not create or open terminal files")
 	command.Flags().BoolVar(&noOpen, "no-open", false, "do not open Warp")
+	command.Flags().BoolVar(&doSync, "sync", false, "fast-forward configured repositories' default branches before starting")
 	return command
 }
