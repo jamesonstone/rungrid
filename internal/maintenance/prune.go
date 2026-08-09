@@ -28,6 +28,25 @@ func Prune(ctx context.Context, loaded *manifest.Loaded, options Options, runner
 	return report, nil
 }
 
+// PruneRepositories applies the native worktree proof to an explicit physical
+// repository inventory. It does not add an interactive confirmation layer.
+func PruneRepositories(ctx context.Context, repositories []Repository, dryRun bool, runner Runner) (PruneReport, error) {
+	report := PruneReport{Operation: OperationPrune, DryRun: dryRun, StartedAt: timestamp()}
+	if runner == nil {
+		runner = CommandRunner{}
+	}
+	for _, repository := range repositories {
+		result, failures := pruneRepository(ctx, repository, dryRun, runner)
+		report.Repositories = append(report.Repositories, result)
+		report.Failures = append(report.Failures, failures...)
+	}
+	report.FinishedAt = timestamp()
+	if len(report.Failures) != 0 {
+		return report, errs.New(errs.ExitPartial, "RG1602", fmt.Sprintf("worktree prune completed with %d failure(s)", len(report.Failures)))
+	}
+	return report, nil
+}
+
 func pruneRepository(ctx context.Context, repository Repository, dryRun bool, runner Runner) (PruneResult, []Failure) {
 	result := PruneResult{Name: repository.Name, Aliases: repository.Aliases, Remote: repository.Remote}
 	branch, _, err := liveDefault(ctx, runner, repository)

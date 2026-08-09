@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/jamesonstone/rungrid/internal/maintenance"
@@ -36,6 +38,40 @@ func (c *MaintenanceCoordinator) AffectedServices(ctx context.Context, worktreeP
 	for index, service := range services {
 		result[index] = service.Name
 	}
+	return result, nil
+}
+
+func (c *MaintenanceCoordinator) OwnedProcessIDs(ctx context.Context, worktreePath string) ([]string, error) {
+	services, err := c.runningServices(ctx, worktreePath)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[int]bool)
+	if c.active.Runtime.PID > 0 && withinMaintenanceWorktree(worktreePath, c.active.Runtime.WorkspaceRoot) {
+		seen[c.active.Runtime.PID] = true
+	}
+	client := supervisor.Client(c.active.Layout, c.active.Runtime)
+	for _, service := range services {
+		current, getErr := client.Get(ctx, service.Name)
+		if getErr != nil {
+			return nil, fmt.Errorf("inspect owned service %s: %w", service.Name, getErr)
+		}
+		if current.PID > 0 {
+			seen[current.PID] = true
+		}
+		if service.Activation == "tab" {
+			registration, live := session.Active(c.active.Layout, c.active.Runtime.GenerationID, service.Name)
+			if !live {
+				return nil, fmt.Errorf("tab-owned service %s has no verified owning session", service.Name)
+			}
+			seen[registration.PID] = true
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for pid := range seen {
+		result = append(result, strconv.Itoa(pid))
+	}
+	sort.Strings(result)
 	return result, nil
 }
 
@@ -141,3 +177,4 @@ func serviceNames(services []*manifest.Service) []string {
 }
 
 var _ maintenance.Coordinator = (*MaintenanceCoordinator)(nil)
+var _ maintenance.ProcessOwner = (*MaintenanceCoordinator)(nil)

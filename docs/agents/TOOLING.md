@@ -66,6 +66,8 @@
 - Never copy environment contents or overwrite destination environment material; preserve a repository- or user-supplied `.envrc`, and remember that direnv approval remains path-specific; worktree tooling does not manage runtime services, databases, ports, Temporal state, processes, or sibling repositories
 - Remember that refs, remotes, objects, configuration, and stash state are shared across worktrees even though checkout, index, and `HEAD` are separate
 - Load `docs/references/worktrees.md` when worktree creation, repair, migration, or removal affects the task
+- Invoke `rungrid reconcile` only when filesystem reconciliation is explicitly in scope; inspect its JSON dry run first and use the native command as the sole mutation primitive
+- Preserve every reconcile refusal or uncertain case; never replace its root-recovery, expected-OID, process-ownership, or cleanup gates with ad hoc Git commands
 
 ## Secondary Global Inputs
 

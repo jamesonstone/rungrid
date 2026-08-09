@@ -27,9 +27,9 @@ Process Compose runtime and, on macOS, an ordered Warp workspace:
 - macOS or Linux for headless use; and
 - Process Compose `>=1.120.0,<2.0.0`.
 
-`rungrid worktrees prune` additionally uses authenticated GitHub CLI metadata
-to prove that a same-repository pull request merged and `lsof` to prove that no
-process has a working directory inside the candidate worktree.
+Repository maintenance additionally uses authenticated GitHub CLI metadata and
+`lsof` for pull-request and process proof. Stale dirty-primary recovery through
+`rungrid reconcile` also requires `gitleaks` before it can create a WIP commit.
 
 Native and Compose services may add their own executable requirements. Run
 `rungrid doctor` for a redacted, project-specific report.
@@ -90,6 +90,21 @@ The prune command confirms removals interactively; automation must pass
 with an exact reason. When Process Compose is active, authorized maintenance
 appears in the Overview under the `maintenance` namespace with the same
 lifecycle and logs.
+
+Reconcile one physical clone, or recursively discover and reconcile every
+clone beneath a directory, without changing manifest-scoped `rungrid sync`:
+
+```sh
+rungrid reconcile ~/src --dry-run --json
+rungrid reconcile ~/src
+```
+
+The command discovers `origin`'s symbolic default branch, preserves recent or
+process-active primary work, and applies the same native worktree cleanup proof.
+Use `--include-submodules` to include submodule clones. High-trust agent mode is
+available as `--agent`, `--agent=select`, `--agent=claude`, `--agent=warp`, or
+`--agent=codex`; it delegates orchestration while requiring the native JSON dry
+run and native apply command to remain the only mutation primitives.
 
 Inside a Warp service tab, Ctrl-C stops that tab's service and returns to the
 same managed zsh. Running the configured exact trigger, such as `make dev`,
@@ -160,15 +175,17 @@ The complete product and safety contract is [CLI_SPEC.md](CLI_SPEC.md). Durable
 implementation rationale lives in
 [docs/specs/rungrid-v1/SPEC.md](docs/specs/rungrid-v1/SPEC.md), with repository
 maintenance decisions in
-[docs/specs/repository-maintenance/SPEC.md](docs/specs/repository-maintenance/SPEC.md).
+[docs/specs/repository-maintenance/SPEC.md](docs/specs/repository-maintenance/SPEC.md),
+and filesystem reconciliation in
+[docs/specs/repository-reconcile/SPEC.md](docs/specs/repository-reconcile/SPEC.md).
 
 ## Commands
 
 Rungrid v1 provides `init`, `doctor`, `plan`, `generate`, `up`, `open`,
-`attach`, `versions`, `status`, `logs`, `sync`, `worktrees prune`, `session`,
-`start`, `stop`, `down`,
-`uninstall`, `config`, `instructions` (alias `agent-start`), `completion`, and
-`version`. Every JSON-capable command uses a `rungrid/output/v1` envelope.
+`attach`, `versions`, `status`, `logs`, `sync`, `reconcile`, `worktrees prune`,
+`session`, `start`, `stop`, `down`, `uninstall`, `config`, `instructions`
+(alias `agent-start`), `completion`, and `version`. Every JSON-capable command
+uses a `rungrid/output/v1` envelope.
 
 `rungrid --help` and `rungrid help` present the workspace lifecycle, service
 ownership model, and commands grouped by workflow. Interactive terminals use
