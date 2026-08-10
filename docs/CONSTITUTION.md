@@ -12,9 +12,10 @@
   authoritative for its lifecycle and logs.
 - One-shot workspace prerequisites and teardown are Rungrid operations. Their
   journal, not Process Compose, is authoritative for ordering and recovery.
-- Repository maintenance is manifest-scoped and fail-closed. Synchronization
-  advances only verified local default branches; worktree removal requires
-  independent Git, GitHub, path, cleanliness, process, and exact-OID proof.
+- Repository maintenance is fail-closed. Ordinary `sync` remains
+  manifest-scoped; explicitly invoked filesystem `reconcile` is the sole
+  exception and still requires independent Git, GitHub, path, activity,
+  process-ownership, cleanliness, and exact-OID proof.
 
 ## CONSTRAINTS
 
@@ -50,10 +51,13 @@
   output is interactive and color is not disabled. Color must never carry
   meaning; redirected and explicitly colorless help remains complete and
   stable.
-- Feature branches and their worktrees are never implicitly checked out,
-  merged, rebased, reset, stopped, or rewritten by repository maintenance.
-  A checked-out default worktree advances only after clean-state and
-  expected-OID revalidation, with exact affected services paused and resumed.
+- Linked feature worktrees are never implicitly checked out, merged, rebased,
+  reset, stopped, or rewritten by repository maintenance. Filesystem
+  reconciliation may commit, stash, or switch only the primary checkout under
+  its explicit stale-root gates; ordinary manifest maintenance retains the
+  no-feature-checkout and no-stash rule. A checked-out default worktree advances
+  only after clean-state and expected-OID revalidation, with exact affected
+  services paused and resumed.
 - Process Compose may present disabled repository-maintenance jobs and their
   logs, but only a short-lived generation-scoped CLI request authorizes one.
   The read-only Overview never grants mutation authority.
@@ -131,5 +135,9 @@
   state view.
 - **Repository sync:** a manifest-scoped fetch followed by an expected-state
   fast-forward of only each local remote-default branch.
+- **Repository reconcile:** an explicitly invoked filesystem scan that
+  deduplicates physical clones, synchronizes each proven remote default,
+  conservatively repairs only eligible stale primary checkouts, and applies
+  native linked-worktree cleanup proof.
 - **Worktree prune:** a confirmed, immediately revalidated, non-force removal
   of only linked worktrees whose independent safety proofs all succeed.

@@ -36,6 +36,32 @@ func Sync(ctx context.Context, loaded *manifest.Loaded, options Options, runner 
 	return report, nil
 }
 
+// SyncRepositories applies the native synchronization contract to an explicit
+// physical repository inventory. It is used by filesystem reconciliation;
+// manifest-scoped callers continue to use Sync.
+func SyncRepositories(ctx context.Context, repositories []Repository, dryRun bool, recoveryTimeout time.Duration, runner Runner, coordinator Coordinator) (SyncReport, error) {
+	report := SyncReport{Operation: OperationSync, DryRun: dryRun, StartedAt: timestamp()}
+	if runner == nil {
+		runner = CommandRunner{}
+	}
+	if coordinator == nil {
+		coordinator = NoopCoordinator{}
+	}
+	if recoveryTimeout <= 0 {
+		recoveryTimeout = 2 * time.Minute
+	}
+	for _, repository := range repositories {
+		result, failures := syncRepository(ctx, repository, dryRun, recoveryTimeout, runner, coordinator)
+		report.Repositories = append(report.Repositories, result)
+		report.Failures = append(report.Failures, failures...)
+	}
+	report.FinishedAt = timestamp()
+	if len(report.Failures) != 0 {
+		return report, errs.New(errs.ExitPartial, "RG1601", fmt.Sprintf("repository sync completed with %d failure(s)", len(report.Failures)))
+	}
+	return report, nil
+}
+
 func syncRepository(ctx context.Context, repository Repository, dryRun bool, recoveryTimeout time.Duration, runner Runner, coordinator Coordinator) (SyncRepository, []Failure) {
 	result := SyncRepository{Name: repository.Name, Aliases: repository.Aliases, Remote: repository.Remote, State: "unavailable", Action: "preserved"}
 	branch, remoteOID, err := liveDefault(ctx, runner, repository)

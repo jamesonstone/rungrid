@@ -25,6 +25,7 @@ before loading broader history.
 | --- | --- | --- | --- |
 | `rungrid-v1` | `docs/specs/rungrid-v1/SPEC.md` | Integrated implementation on `GH-3` plus locally validated workspace-root and lifecycle extension on `GH-10`. | Ready for pull-request review; graphical smoke, license selection, release publication, and consumer cutover remain gated. |
 | `repository-maintenance` | `docs/specs/repository-maintenance/SPEC.md` | Validated implementation on `GH-20`. | Ready for pull-request review; hosted checks remain. |
+| `repository-reconcile` | `docs/specs/repository-reconcile/SPEC.md` | Locally validated implementation on `GH-23`. | Ready for stacked pull-request review against `feat/up-sync-flag`; hosted checks remain. |
 
 ## FEATURE SUMMARIES
 
@@ -55,6 +56,21 @@ before loading broader history.
 - **OPEN ITEMS**: Review the ready pull request and observe hosted checks.
 - **POINTER**: `docs/specs/repository-maintenance/SPEC.md`
 
+### Repository reconcile
+
+- **STATUS**: review candidate
+- **INTENT**: Reconcile one physical clone or a recursive repository tree while
+  preserving active primary work and keeping manifest synchronization unchanged.
+- **IMPLEMENTED**: Filesystem discovery and common-directory deduplication,
+  live-origin default proof, expected-OID synchronization, decomposed primary
+  activity evidence, guarded WIP/stash/switch recovery, native merged-worktree
+  cleanup, lifecycle ownership coordination, typed reports, and four optional
+  unattended coding-agent adapters.
+- **OPEN ITEMS**: Review the stacked ready pull request, observe hosted checks,
+  and retarget it to the default branch after the `up --sync` base pull request
+  merges without rebasing or force-pushing.
+- **POINTER**: `docs/specs/repository-reconcile/SPEC.md`
+
 ## Current implementation
 
 - The Go CLI implements the complete documented command surface, strict
@@ -82,6 +98,8 @@ before loading broader history.
 
 ## Last updated
 
+- 2026-08-09: Implemented and locally validated filesystem repository
+  reconciliation, stale-primary safety gates, and agent adapters.
 - 2026-08-06: Implemented and locally validated default-branch synchronization,
   fail-closed worktree pruning, and service-aware maintenance lifecycle.
 - 2026-08-03: Implemented and locally validated portable workspace roots and

@@ -277,6 +277,22 @@ prevent an independently proven-safe candidate from being processed, but any
 operation failure makes the overall command exit nonzero after its complete
 human or JSON report.
 
+Rungrid provides a separate native filesystem reconciliation boundary for
+operators who explicitly request cross-repository maintenance:
+
+```bash
+rungrid reconcile ~/src --dry-run --json
+rungrid reconcile ~/src
+```
+
+Unlike manifest-scoped `rungrid sync`, this command discovers physical clones
+beneath the supplied directory, uses only each clone's `origin`, and may repair
+the primary checkout after its fixed inactivity and safety proofs. Linked lanes
+retain the stricter canonical-path, clean-state, merged-PR, exact-head,
+deleted-remote, and no-process removal proof. Agents must not reproduce these
+mutations with ad hoc Git commands or treat the command as general permission
+to alter another lane.
+
 Move a registered legacy worktree only after validating its exact source,
 destination, and every collision:
 

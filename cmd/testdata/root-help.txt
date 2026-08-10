@@ -59,6 +59,7 @@ Observe
 
 Maintain
   sync           Fast-forward configured repositories' default branches
+  reconcile      Safely reconcile a repository or recursive repository tree
   worktrees      Inspect and safely maintain linked Git worktrees
 
 Control

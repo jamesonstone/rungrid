@@ -12,7 +12,7 @@
 | --- | --- | --- | --- | --- |
 | Formatting | `make fmt-check` | `CI / test` | yes | `gofmt` cleanliness without mutation |
 | Static analysis | `make vet` | `CI / test` | yes | all Go packages |
-| Unit and integration | `make test` | `CI / test` | yes | schema, merge, workspace boundaries, state, argv, environment, generation, lifecycle journal and recovery, repository-maintenance proof, onboarding, and golden contracts |
+| Unit and integration | `make test` | `CI / test` | yes | schema, merge, workspace boundaries, state, argv, environment, generation, lifecycle journal and recovery, repository-maintenance and filesystem-reconciliation proof, onboarding, and golden contracts |
 | Race | `make test-race` | `CI / test` | yes | all Go packages, with the opt-in E2E skipped |
 | Contract sanitization | `make sanitize` | `CI / test` | yes | rejects personal/workspace identifiers and unsafe absolute paths in `CLI_SPEC.md` |
 | Lint | `make lint` | `CI / lint` | yes | `golangci-lint` |
@@ -32,6 +32,9 @@
 ## Environment Preflights
 
 - Local code-level checks require the Go version in `go.mod`.
+- Filesystem-reconciliation process tests additionally require `lsof`; they
+  skip only those live-process cases when it is unavailable, while fake-runner
+  ownership and refusal coverage remains mandatory.
 - The headless suite additionally requires Process Compose
   `>=1.120.0,<2.0.0`, a Unix-like host, and permission to create temporary Unix
   sockets and child processes. It uses temporary workspace and XDG roots and a

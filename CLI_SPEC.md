@@ -983,7 +983,62 @@ resumes it. A tab session retains its generation-scoped ownership throughout.
 `--dry-run` may query the remote but performs no fetch, ref write, state write,
 or process operation.
 
-### 11.12 worktrees prune
+### 11.12 reconcile
+
+```text
+rungrid reconcile [path] [--dry-run] [--include-submodules] [--json]
+rungrid reconcile [path] [--agent[=copilot|select|claude|warp|codex]]
+```
+
+Defaults `path` to the current directory. A path inside a Git worktree selects
+only that physical clone. Other directories are scanned recursively without
+following directory symlinks; clones are deduplicated by physical Git common
+directory and submodules are omitted unless explicitly included. Reconciliation
+always uses `origin`, requires its live symbolic HEAD, and does not inherit
+manifest repository overrides or guess a default branch.
+
+Apply fetches and prunes, re-reads the live default, and advances it only with
+the expected-OID synchronization contract above. It then evaluates the primary
+checkout using separate HEAD-commit, HEAD-reflog, dirty-path-mtime, process-cwd,
+and dirty-open-file evidence. Recent or process-active feature roots are
+preserved while an unoccupied default ref may still advance. A clean feature
+root switches only after exact merged-PR proof or 72 hours of inactivity.
+
+A dirty feature root always requires 72 hours of inactivity, exact
+`GH-<number>` issue ownership, an initially empty index, human Git identity,
+safe explicit paths, and a successful staged `gitleaks` scan before Rungrid may
+create its prescribed WIP commit and switch the primary checkout. A stale dirty
+default that is strictly behind may be stashed with nonignored untracked files;
+the exact stash OID is reported and the stash is never popped or dropped.
+Linked worktrees retain the stricter native prune proof and never receive the
+primary-checkout exception.
+
+When the repository belongs to a verified active workspace, apply acquires the
+project maintenance lock and pauses/resumes only coordinator-owned affected
+services. Any unattributed process or failed ownership inspection preserves the
+dependent checkout. `--dry-run` may query filesystems, processes, Git, GitHub,
+and the remote, but never fetches, writes refs or state, stages, stashes,
+commits, switches, pauses, removes, or prunes. Independent repositories
+continue after failures; any unsynchronized default or required safety failure
+returns the typed partial status.
+
+Agent mode is high-trust, mutually exclusive with `--dry-run` and `--json`, and
+uses the following exact adapters after executable validation:
+
+```text
+copilot -C <path> -p <prompt> --allow-all --no-ask-user --autopilot
+claude -p --dangerously-skip-permissions <prompt>  # cwd is <path>
+oz agent run -C <path> --prompt <prompt>
+codex exec -C <path> --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox <prompt>
+```
+
+The prompt requires the agent to run native JSON dry-run first, obey repository
+rules, preserve uncertainty, use native reconcile as its sole mutation
+primitive, and summarize the native result. Bare `--agent` selects Copilot;
+`select` uses `fzf` when installed and otherwise requires a numbered terminal
+selection. Provider output and exit status pass through unchanged.
+
+### 11.13 worktrees prune
 
 ```text
 rungrid worktrees prune [--repository <name>]... [--dry-run] [--yes] [--json]
@@ -1006,7 +1061,7 @@ typed partial result. It never uses direct recursive deletion or deletes a
 remote branch. `--dry-run` performs no local Git, state, process, symlink,
 metadata, or filesystem mutation.
 
-### 11.13 session
+### 11.14 session
 
 ```text
 rungrid session <service>
@@ -1015,7 +1070,7 @@ rungrid session <service>
 Acquires exclusive tab ownership, starts the service, follows raw logs, and
 stops/releases on ownership-ending signals.
 
-### 11.14 start and stop
+### 11.15 start and stop
 
 ```text
 rungrid start <service>
@@ -1024,7 +1079,7 @@ rungrid stop <service>
 
 Perform the activation-aware behavior defined in the lifecycle contract.
 
-### 11.15 down
+### 11.16 down
 
 ```text
 rungrid down [--timeout <duration>]
@@ -1034,7 +1089,7 @@ Performs ordered project-owned shutdown. It is idempotent when no verified
 runtime exists only when the lifecycle journal also proves no teardown is
 required. A missing runtime does not suppress required `after_down` commands.
 
-### 11.16 uninstall
+### 11.17 uninstall
 
 ```text
 rungrid uninstall [--keep-logs] [--keep-config]
@@ -1049,7 +1104,7 @@ for diagnosis; it does not refer to the source manifest.
 Uninstall refuses to discard a cleanup-required journal. It succeeds only
 after required teardown completes or when no teardown was ever required.
 
-### 11.17 config
+### 11.18 config
 
 ```text
 rungrid config validate
@@ -1061,7 +1116,7 @@ rungrid config path
 `show` is redacted by default. Schema output is stable JSON Schema derived from
 the v1 manifest contract.
 
-### 11.18 completion
+### 11.19 completion
 
 ```text
 rungrid completion bash|zsh|fish
@@ -1069,7 +1124,7 @@ rungrid completion bash|zsh|fish
 
 Writes shell completion to standard output without installing it.
 
-### 11.19 version
+### 11.20 version
 
 ```text
 rungrid version [--json]
@@ -1079,7 +1134,7 @@ Reports semantic version, commit, build time, dirty marker when known, target,
 and supported manifest/output APIs. Release and repository metadata come from
 the build, not a hard-coded owner namespace.
 
-### 11.20 instructions
+### 11.21 instructions
 
 ```text
 rungrid instructions [project-path ...]
@@ -1129,6 +1184,55 @@ existing field meaning may not change.
 Diagnostics have stable codes, severity, summary, optional field path, and a
 redacted detail. Human and JSON modes share codes.
 
+Filesystem reconciliation uses kind `RepositoryReconcileReport`. Its data
+contains the deduplicated inventory, common directories, live default and local
+and remote OIDs, per-source primary activity evidence, process ownership,
+root and cleanup decisions, mutation OIDs, preservation reasons, and complete
+failures. For example:
+
+```json
+{
+  "api_version": "rungrid/output/v1",
+  "kind": "RepositoryReconcileReport",
+  "data": {
+    "operation": "reconcile",
+    "target": "/path/to/repository",
+    "dry_run": true,
+    "started_at": "2026-08-09T12:00:00Z",
+    "finished_at": "2026-08-09T12:00:01Z",
+    "repositories": [{
+      "name": "repository",
+      "path": "/path/to/repository",
+      "common_dir": "/path/to/repository/.git",
+      "default_branch": "trunk",
+      "sync": {
+        "name": "repository",
+        "remote": "origin",
+        "default_branch": "trunk",
+        "local_oid": "1111111111111111111111111111111111111111",
+        "remote_oid": "2222222222222222222222222222222222222222",
+        "state": "behind",
+        "action": "would-fast-forward"
+      },
+      "root": {
+        "path": "/path/to/repository",
+        "branch": "GH-123",
+        "head_oid": "3333333333333333333333333333333333333333",
+        "dirty": false,
+        "activity_at": "2026-08-01T12:00:00Z",
+        "head_commit_at": "2026-08-01T12:00:00Z",
+        "head_reflog_at": "2026-08-01T12:00:00Z",
+        "action": "preserved",
+        "reason": "recent-clean-feature-root"
+      },
+      "worktrees": []
+    }],
+    "failures": []
+  },
+  "diagnostics": []
+}
+```
+
 ## 13. Exit status
 
 ```text
@@ -1138,7 +1242,7 @@ redacted detail. Human and JSON modes share codes.
 3  dependency or compatibility error
 4  runtime identity or ownership conflict
 5  requested service not ready before timeout
-6  partial shutdown or uninstall
+6  partial shutdown, uninstall, maintenance, or reconciliation
 130 interrupted by Ctrl-C
 ```
 

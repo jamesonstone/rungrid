@@ -16,7 +16,7 @@ var rootHelpSections = []helpCommandSection{
 	{title: "Configure", commands: []string{"init", "instructions", "doctor", "config"}},
 	{title: "Build & Launch", commands: []string{"plan", "generate", "up", "open"}},
 	{title: "Observe", commands: []string{"attach", "versions", "status", "logs"}},
-	{title: "Maintain", commands: []string{"sync", "worktrees"}},
+	{title: "Maintain", commands: []string{"sync", "reconcile", "worktrees"}},
 	{title: "Control", commands: []string{"session", "start", "stop", "down"}},
 	{title: "Cleanup & Utilities", commands: []string{"uninstall", "completion", "version", "help"}},
 }
