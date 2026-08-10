@@ -150,6 +150,20 @@ func TestProcessComposeLogLevelValidation(t *testing.T) {
 	}
 }
 
+func TestProcessComposeLogRotationDefaultsAndValidation(t *testing.T) {
+	t.Parallel()
+	configuration := validEmptyManifest("info")
+	if configuration.Runtime.ProcessCompose.LogRotation.MaxSizeMB != 10 || configuration.Runtime.ProcessCompose.LogRotation.MaxBackups != 1 {
+		t.Fatalf("unexpected log rotation defaults: %#v", configuration.Runtime.ProcessCompose.LogRotation)
+	}
+	configuration.Runtime.ProcessCompose.LogRotation.MaxSizeMB = -1
+	configuration.Runtime.ProcessCompose.LogRotation.MaxBackups = -1
+	err := Validate(&configuration, t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "log_rotation.max_size_mb") || !strings.Contains(err.Error(), "log_rotation.max_backups") {
+		t.Fatalf("expected invalid log rotation error, got %v", err)
+	}
+}
+
 func validEmptyManifest(logLevel string) Manifest {
 	configuration := Manifest{
 		APIVersion: APIVersion,

@@ -26,6 +26,7 @@ before loading broader history.
 | `rungrid-v1` | `docs/specs/rungrid-v1/SPEC.md` | Integrated implementation on `GH-3` plus locally validated workspace-root and lifecycle extension on `GH-10`. | Ready for pull-request review; graphical smoke, license selection, release publication, and consumer cutover remain gated. |
 | `repository-maintenance` | `docs/specs/repository-maintenance/SPEC.md` | Validated implementation on `GH-20`. | Ready for pull-request review; hosted checks remain. |
 | `repository-reconcile` | `docs/specs/repository-reconcile/SPEC.md` | Locally validated implementation on `GH-23`. | Ready for stacked pull-request review against `feat/up-sync-flag`; hosted checks remain. |
+| `bounded-local-runtime` | `docs/specs/bounded-local-runtime/SPEC.md` | Locally validated implementation on `GH-26`. | Ready for pull-request review; hosted checks remain. |
 
 ## FEATURE SUMMARIES
 
@@ -71,6 +72,17 @@ before loading broader history.
   merges without rebasing or force-pushing.
 - **POINTER**: `docs/specs/repository-reconcile/SPEC.md`
 
+### Bounded local runtime
+
+- **STATUS**: review candidate
+- **INTENT**: Bound persisted development logs and remove avoidable
+  steady-state monitoring subprocesses in many-service workspaces.
+- **IMPLEMENTED**: Per-process 10 MB rotation with one compressed rollover,
+  discarded non-rotatable Process Compose diagnostics, cached Git and external
+  health state, batched listener discovery, and material-change redraws.
+- **OPEN ITEMS**: Review the ready pull request and observe hosted checks.
+- **POINTER**: `docs/specs/bounded-local-runtime/SPEC.md`
+
 ## Current implementation
 
 - The Go CLI implements the complete documented command surface, strict
@@ -98,6 +110,8 @@ before loading broader history.
 
 ## Last updated
 
+- 2026-08-10: Implemented and locally validated bounded managed-process logs
+  and lower-overhead Versions monitoring for long-running workspaces.
 - 2026-08-09: Implemented and locally validated filesystem repository
   reconciliation, stale-primary safety gates, and agent adapters.
 - 2026-08-06: Implemented and locally validated default-branch synchronization,

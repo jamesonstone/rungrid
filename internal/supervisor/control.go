@@ -80,7 +80,7 @@ func Client(layout state.Layout, runtimeState Runtime) processcompose.Client {
 	return processcompose.Client{
 		Executable: runtimeState.ProcessCompose,
 		Socket:     "runtime.sock",
-		LogFile:    processcompose.ClientLog(layout.ProjectDir),
+		LogFile:    processcompose.InternalLog(),
 		WorkDir:    layout.ProjectDir,
 	}
 }

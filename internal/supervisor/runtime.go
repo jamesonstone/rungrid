@@ -73,7 +73,7 @@ func Start(ctx context.Context, options StartOptions) (result Runtime, reused bo
 	} else if !os.IsNotExist(err) {
 		return Runtime{}, false, errs.Wrap(errs.ExitConflict, "RG605", "inspect runtime socket", err)
 	}
-	serverLog := filepath.Join(options.Layout.ProjectDir, "process-compose.log")
+	serverLog := processcompose.InternalLog()
 	arguments := []string{
 		"-D", "-t=false", "-U", "-u", filepath.Join("..", "..", "runtime.sock"),
 		"-f", configuration, "--keep-project", "--ordered-shutdown", "--disable-dotenv", "-L", serverLog,
@@ -96,7 +96,7 @@ func Start(ctx context.Context, options StartOptions) (result Runtime, reused bo
 		}
 		cleanupContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		cleanupClient := processcompose.Client{Executable: options.ProcessCompose, Socket: "runtime.sock", LogFile: processcompose.ClientLog(options.Layout.ProjectDir), WorkDir: options.Layout.ProjectDir}
+		cleanupClient := processcompose.Client{Executable: options.ProcessCompose, Socket: "runtime.sock", LogFile: processcompose.InternalLog(), WorkDir: options.Layout.ProjectDir}
 		if cleanupClient.Down(cleanupContext) == nil {
 			if _, _, uid, socketErr := inspectSocket(socket); socketErr == nil && uid == uint32(os.Getuid()) {
 				_ = os.Remove(socket)

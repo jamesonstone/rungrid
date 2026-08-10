@@ -122,6 +122,9 @@ runtime:
   shutdown_timeout: 20s
   process_compose:
     log_level: info
+    log_rotation:
+      max_size_mb: 10
+      max_backups: 1
 
 terminal:
   mode: warp
@@ -263,11 +266,18 @@ runtime:
   process_compose:
     executable: process-compose
     log_level: info
+    log_rotation:
+      max_size_mb: 10
+      max_backups: 1
 ```
 
 Durations use Go duration syntax. Executable values are names resolved through
 the current execution environment unless an operator-local override supplies a
-path. Required Process Compose compatibility is always enforced.
+path. Required Process Compose compatibility is always enforced. Managed
+process logs rotate when they reach `max_size_mb`, retain at most
+`max_backups` compressed rollovers, and expire using `log_retention` rounded up
+to whole days. The safe defaults are 10 MB and one rollover. Process Compose
+internal diagnostics, which expose no rotation policy, are not persisted.
 
 ### 5.7 Terminal
 
@@ -775,7 +785,10 @@ It displays, for every included service:
 Output refreshes without clearing terminal scrollback unnecessarily and reacts
 to terminal resizing. `--once` prints one snapshot. `--json` emits a
 `rungrid/output/v1` envelope and implies one snapshot unless paired with an
-explicit streaming mode.
+explicit streaming mode. Watch mode polls lightweight process state every
+second, batches listener discovery at most every five seconds, refreshes Git
+metadata at most every ten seconds, and redraws only after material state
+changes.
 
 ### 10.3 Service tabs
 

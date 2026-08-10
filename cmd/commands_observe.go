@@ -101,13 +101,17 @@ func watchVersions(command *cobra.Command, active lifecycle.Active) error {
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-	first := true
+	collector := versions.NewCollector()
+	var previous versions.Snapshot
 	for {
-		if !first {
-			_, _ = fmt.Fprint(command.OutOrStdout(), "\033[H\033[J")
+		snapshot := collector.Capture(ctx, active.Manifest, active.Runtime, supervisor.Client(active.Layout, active.Runtime))
+		if previous.CapturedAt == "" || !versions.MateriallyEqual(previous, snapshot) {
+			if previous.CapturedAt != "" {
+				_, _ = fmt.Fprint(command.OutOrStdout(), "\033[H\033[J")
+			}
+			versions.WriteHuman(command.OutOrStdout(), snapshot)
+			previous = snapshot
 		}
-		first = false
-		versions.WriteHuman(command.OutOrStdout(), versions.Capture(ctx, active.Manifest, active.Runtime, supervisor.Client(active.Layout, active.Runtime)))
 		select {
 		case <-ctx.Done():
 			return nil

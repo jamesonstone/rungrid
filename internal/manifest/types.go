@@ -81,8 +81,14 @@ type Runtime struct {
 }
 
 type ProcessComposeRuntime struct {
-	Executable string `yaml:"executable,omitempty" json:"executable"`
-	LogLevel   string `yaml:"log_level,omitempty" json:"log_level"`
+	Executable  string      `yaml:"executable,omitempty" json:"executable"`
+	LogLevel    string      `yaml:"log_level,omitempty" json:"log_level"`
+	LogRotation LogRotation `yaml:"log_rotation,omitempty" json:"log_rotation"`
+}
+
+type LogRotation struct {
+	MaxSizeMB  int `yaml:"max_size_mb,omitempty" json:"max_size_mb"`
+	MaxBackups int `yaml:"max_backups,omitempty" json:"max_backups"`
 }
 
 type Terminal struct {
@@ -190,6 +196,12 @@ func (m *Manifest) ApplyDefaults() {
 	}
 	if m.Runtime.ProcessCompose.LogLevel == "" {
 		m.Runtime.ProcessCompose.LogLevel = "info"
+	}
+	if m.Runtime.ProcessCompose.LogRotation.MaxSizeMB == 0 {
+		m.Runtime.ProcessCompose.LogRotation.MaxSizeMB = 10
+	}
+	if m.Runtime.ProcessCompose.LogRotation.MaxBackups == 0 {
+		m.Runtime.ProcessCompose.LogRotation.MaxBackups = 1
 	}
 	if m.Terminal.Mode == "" {
 		m.Terminal.Mode = "warp"
