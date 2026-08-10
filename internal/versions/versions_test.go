@@ -2,11 +2,13 @@ package versions
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/processcompose"
@@ -14,16 +16,70 @@ import (
 	"github.com/jamesonstone/rungrid/internal/supervisor"
 )
 
-func TestListeningPortsParsesAndSortsLsofOutput(t *testing.T) {
+func TestListeningPortsParsesAndSortsBatchedLsofOutput(t *testing.T) {
 	directory := t.TempDir()
 	executable := filepath.Join(directory, "lsof")
-	script := "#!/bin/sh\nprintf 'p42\\nn127.0.0.1:9000\\nn*:8080\\nn[::1]:9000\\n'\n"
+	script := "#!/bin/sh\nprintf 'p42\\nn127.0.0.1:9000\\nn*:8080\\nn[::1]:9000\\np77\\nn*:7000\\n'\n"
 	if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
-	if ports := listeningPorts(context.Background(), 42); !reflect.DeepEqual(ports, []int{8080, 9000}) {
+	ports := listeningPortsByPID(context.Background(), []int{42, 77})
+	if !reflect.DeepEqual(ports[42], []int{8080, 9000}) || !reflect.DeepEqual(ports[77], []int{7000}) {
 		t.Fatalf("unexpected ports %#v", ports)
+	}
+}
+
+func TestCollectorCachesExpensiveDiscoveryIndependently(t *testing.T) {
+	workspace := t.TempDir()
+	clientExecutable := filepath.Join(workspace, "process-compose")
+	script := "#!/bin/sh\nprintf '[{\"name\":\"api\",\"status\":\"Running\",\"pid\":42}]\\n'\n"
+	if err := os.WriteFile(clientExecutable, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	m := &manifest.Manifest{
+		Services: []manifest.Service{
+			{Name: "api", Source: "native", WorkingDirectory: "."},
+			{Name: "database", Source: "external", WorkingDirectory: ".", External: &manifest.External{}},
+		},
+	}
+	now := time.Unix(100, 0)
+	sourceCalls, listenerCalls, externalCalls := 0, 0, 0
+	collector := NewCollector()
+	collector.now = func() time.Time { return now }
+	collector.captureSource = func(context.Context, string, string) sourceVersion {
+		sourceCalls++
+		return sourceVersion{branch: "main", commit: "1234567", gitState: "clean", worktree: "workspace", root: workspace}
+	}
+	collector.captureListeners = func(context.Context, []int) map[int][]int {
+		listenerCalls++
+		return map[int][]int{42: {8000}}
+	}
+	collector.checkExternal = func(context.Context, *manifest.Manifest, string, *manifest.Service) error {
+		externalCalls++
+		return errors.New("not ready")
+	}
+	client := processcompose.Client{Executable: clientExecutable, Socket: "socket", LogFile: os.DevNull, WorkDir: workspace}
+	runtimeState := supervisor.Runtime{WorkspaceRoot: workspace, GenerationID: "generation"}
+
+	first := collector.Capture(context.Background(), m, runtimeState, client)
+	now = now.Add(time.Second)
+	second := collector.Capture(context.Background(), m, runtimeState, client)
+	if sourceCalls != 1 || listenerCalls != 1 || externalCalls != 1 {
+		t.Fatalf("unexpected calls after cached capture: source=%d listener=%d external=%d", sourceCalls, listenerCalls, externalCalls)
+	}
+	if !MateriallyEqual(first, second) {
+		t.Fatalf("timestamps should not make snapshots materially different: %#v %#v", first, second)
+	}
+	now = now.Add(5 * time.Second)
+	collector.Capture(context.Background(), m, runtimeState, client)
+	if sourceCalls != 1 || listenerCalls != 2 || externalCalls != 2 {
+		t.Fatalf("unexpected calls after five seconds: source=%d listener=%d external=%d", sourceCalls, listenerCalls, externalCalls)
+	}
+	now = now.Add(5 * time.Second)
+	collector.Capture(context.Background(), m, runtimeState, client)
+	if sourceCalls != 2 || listenerCalls != 3 || externalCalls != 3 {
+		t.Fatalf("unexpected calls after ten seconds: source=%d listener=%d external=%d", sourceCalls, listenerCalls, externalCalls)
 	}
 }
 

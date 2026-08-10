@@ -8,6 +8,12 @@ processes:
     command: ./wrappers/database
     working_dir: .
     log_location: ./logs/database.log
+    log_configuration:
+      rotation:
+        max_size_mb: 10
+        max_age_days: 7
+        max_backups: 1
+        compress: true
     is_dotenv_disabled: true
     availability:
       restart: no
@@ -25,6 +31,12 @@ processes:
     command: ./wrappers/api
     working_dir: .
     log_location: ./logs/api.log
+    log_configuration:
+      rotation:
+        max_size_mb: 10
+        max_age_days: 7
+        max_backups: 1
+        compress: true
     is_dotenv_disabled: true
     disabled: true
     depends_on:
@@ -38,6 +50,12 @@ processes:
     command: ./wrappers/web
     working_dir: .
     log_location: ./logs/web.log
+    log_configuration:
+      rotation:
+        max_size_mb: 10
+        max_age_days: 7
+        max_backups: 1
+        compress: true
     is_dotenv_disabled: true
     disabled: true
     availability:
@@ -48,6 +66,12 @@ processes:
     command: ./wrappers/rungrid-maintenance-sync
     working_dir: .
     log_location: ./logs/rungrid-maintenance-sync.log
+    log_configuration:
+      rotation:
+        max_size_mb: 10
+        max_age_days: 7
+        max_backups: 1
+        compress: true
     is_dotenv_disabled: true
     disabled: true
     namespace: maintenance
@@ -59,6 +83,12 @@ processes:
     command: ./wrappers/rungrid-maintenance-worktrees-prune
     working_dir: .
     log_location: ./logs/rungrid-maintenance-worktrees-prune.log
+    log_configuration:
+      rotation:
+        max_size_mb: 10
+        max_age_days: 7
+        max_backups: 1
+        compress: true
     is_dotenv_disabled: true
     disabled: true
     namespace: maintenance

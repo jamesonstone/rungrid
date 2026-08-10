@@ -4,17 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os/exec"
-	"path/filepath"
-	"sort"
+	"reflect"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/processcompose"
-	"github.com/jamesonstone/rungrid/internal/serviceexec"
-	"github.com/jamesonstone/rungrid/internal/subprocess"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
 )
 
@@ -39,53 +34,13 @@ type ServiceVersion struct {
 }
 
 func Capture(ctx context.Context, m *manifest.Manifest, runtimeState supervisor.Runtime, client processcompose.Client) Snapshot {
-	result := Snapshot{
-		CapturedAt: time.Now().UTC().Format(time.RFC3339),
-		Runtime:    "running",
-		Generation: runtimeState.GenerationID,
-	}
-	states, _, err := client.List(ctx)
-	if err != nil {
-		result.Runtime = "unavailable"
-	}
-	byName := make(map[string]processcompose.ProcessState, len(states))
-	for _, state := range states {
-		byName[state.Name] = state
-	}
-	for i := range m.Services {
-		service := &m.Services[i]
-		if service.Terminal.IncludeInVersions != nil && !*service.Terminal.IncludeInVersions {
-			continue
-		}
-		repository := service.Repository
-		if repository == "" {
-			repository = manifest.WorkspaceRepository
-		}
-		item := ServiceVersion{Name: service.Name, Repository: repository, State: "unknown", GitState: "unavailable", Ports: append([]int(nil), service.Ports...)}
-		if service.Source == "external" {
-			if serviceexec.CheckExternal(ctx, m, runtimeState.WorkspaceRoot, service) == nil {
-				item.State = "external-ready"
-				item.Health = "healthy"
-			} else {
-				item.State = "external-unavailable"
-				item.Health = "unhealthy"
-			}
-		} else if state, exists := byName[service.Name]; exists {
-			item.State = state.Status
-			item.Health = state.Health
-			item.PID = state.PID
-			if state.PID > 0 {
-				if ports := listeningPorts(ctx, state.PID); len(ports) > 0 {
-					item.Ports = ports
-				}
-			}
-		}
-		if workingDirectory, pathErr := manifest.ServiceWorkingDirectory(m, runtimeState.WorkspaceRoot, service); pathErr == nil {
-			item.Branch, item.Commit, item.GitState, item.Worktree = gitVersion(ctx, workingDirectory)
-		}
-		result.Services = append(result.Services, item)
-	}
-	return result
+	return NewCollector().Capture(ctx, m, runtimeState, client)
+}
+
+func MateriallyEqual(left, right Snapshot) bool {
+	return left.Runtime == right.Runtime &&
+		left.Generation == right.Generation &&
+		reflect.DeepEqual(left.Services, right.Services)
 }
 
 func WriteHuman(w io.Writer, snapshot Snapshot) {
@@ -114,66 +69,4 @@ func WriteHuman(w io.Writer, snapshot Snapshot) {
 		}
 		_, _ = fmt.Fprintf(w, "%-18s %-14s %-18s %-9s %-7s %-12s %-18s %-10s\n", service.Name, service.Repository, service.State, health, pid, ports, version, service.GitState)
 	}
-}
-
-func listeningPorts(ctx context.Context, pid int) []int {
-	capture, err := subprocess.Run(exec.CommandContext(ctx, "lsof", "-nP", "-a", "-p", strconv.Itoa(pid), "-iTCP", "-sTCP:LISTEN", "-F", "n"))
-	if err != nil {
-		return nil
-	}
-	seen := map[int]bool{}
-	for _, line := range strings.Split(string(capture.Stdout), "\n") {
-		if !strings.HasPrefix(line, "n") {
-			continue
-		}
-		address := strings.TrimPrefix(line, "n")
-		index := strings.LastIndexByte(address, ':')
-		if index < 0 {
-			continue
-		}
-		portText := address[index+1:]
-		if end := strings.IndexByte(portText, '-'); end >= 0 {
-			portText = portText[:end]
-		}
-		if port, parseErr := strconv.Atoi(portText); parseErr == nil && port > 0 && port <= 65535 {
-			seen[port] = true
-		}
-	}
-	result := make([]int, 0, len(seen))
-	for port := range seen {
-		result = append(result, port)
-	}
-	sort.Ints(result)
-	return result
-}
-
-func gitVersion(ctx context.Context, directory string) (branch, commit, gitState, worktree string) {
-	branch = runGit(ctx, directory, "branch", "--show-current")
-	commit = runGit(ctx, directory, "rev-parse", "--short", "HEAD")
-	if branch == "" && commit == "" {
-		return "", "", "unavailable", ""
-	}
-	statusCommand := exec.CommandContext(ctx, "git", "-C", directory, "status", "--porcelain", "--untracked-files=normal")
-	statusResult, err := subprocess.Run(statusCommand)
-	if err != nil {
-		gitState = "unavailable"
-	} else if len(statusResult.Stdout) == 0 {
-		gitState = "clean"
-	} else {
-		gitState = "dirty"
-	}
-	root := runGit(ctx, directory, "rev-parse", "--show-toplevel")
-	if root != "" {
-		worktree = filepath.Base(root)
-	}
-	return branch, commit, gitState, worktree
-}
-
-func runGit(ctx context.Context, directory string, arguments ...string) string {
-	command := exec.CommandContext(ctx, "git", append([]string{"-C", directory}, arguments...)...)
-	result, err := subprocess.Run(command)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(result.Stdout))
 }

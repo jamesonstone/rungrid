@@ -98,3 +98,10 @@ func TestSupportedVersionRange(t *testing.T) {
 		}
 	}
 }
+
+func TestInternalLogIsDiscarded(t *testing.T) {
+	t.Parallel()
+	if InternalLog() != os.DevNull {
+		t.Fatalf("internal Process Compose logs must be discarded, got %q", InternalLog())
+	}
+}
