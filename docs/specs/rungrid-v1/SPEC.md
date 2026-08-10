@@ -357,6 +357,19 @@ Local validation completed on macOS with Process Compose 1.120.0:
   escapes, overlay replacement, exact argument vectors, timeouts, cancellation,
   redaction, lock replacement, journaling, rollback, missing-runtime cleanup,
   retry and no-op teardown, and uninstall refusal while cleanup is required.
+- Issue `#29` adds supervisor refusal coverage for live PIDs and present socket
+  paths plus lifecycle reconciliation coverage for matched and unmatched stale
+  journal identities. `make check`, `make lint`, and `make vuln` pass after
+  integration with current `main`.
+- The real Platform `.rungrid.yaml` reproduced the stale PID with an `active`
+  journal, absent recorded process, and absent socket. The candidate completed
+  required teardown, reran prerequisites, started generation
+  `0ee1e54fd63b6582123d`, and reported an active verified runtime; the ordinary
+  installed command then reused that runtime successfully. Platform source was
+  not modified, and `--no-open` avoided a graphical side effect.
+- Clean-source headless lifecycle evidence for issue `#29` is recorded as run
+  `20260810T202921Z-024383` at merge commit `0ad699d`; the same commit passed a
+  release snapshot for all four supported OS/architecture targets.
 - Real mixed-service and tab-only headless runs prove prerequisites precede the
   supervisor, teardown follows it, repeated `up` does not repeat prerequisites,
   and Process Compose remains the managed-service lifecycle authority.
@@ -390,12 +403,15 @@ environment were unavailable where applicable.
 Rungrid v1 is implemented as a review candidate with the neutral contract,
 portable multi-repository workspace boundary, crash-safe one-shot lifecycle,
 Process Compose runtime, Warp/headless presentation, onboarding, tests, CI, and
-release packaging. A read-only agent instruction surface can now hand the
-portable integration contract and selected path hints to a coding agent before
-the manifest exists. Root and subcommand help now expose the same contract in a
-Rungrid-specific, workflow-grouped terminal presentation with a stable plain
-fallback. The neutral implementation is ready for a separately owned consumer
-cutover lane; this outcome does not claim consumer parity.
+release packaging. A conclusively dead Process Compose runtime can now retire
+only its unchanged journal-matched record, complete required teardown, and
+restart without weakening live-process or socket safety. A read-only agent
+instruction surface can now hand the portable integration contract and
+selected path hints to a coding agent before the manifest exists. Root and
+subcommand help now expose the same contract in a Rungrid-specific,
+workflow-grouped terminal presentation with a stable plain fallback. The
+neutral implementation is ready for a separately owned consumer cutover lane;
+this outcome does not claim consumer parity.
 
 Default-branch history was not rewritten:
 repository guardrails prohibit force pushing or mutating the default branch,
