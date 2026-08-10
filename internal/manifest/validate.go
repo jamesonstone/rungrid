@@ -62,6 +62,12 @@ func Validate(m *Manifest, root string) error {
 	}[m.Runtime.ProcessCompose.LogLevel] {
 		add("runtime.process_compose.log_level", "must be trace, debug, info, warn, error, fatal, panic, or disabled")
 	}
+	if m.Runtime.ProcessCompose.LogRotation.MaxSizeMB <= 0 {
+		add("runtime.process_compose.log_rotation.max_size_mb", "must be positive")
+	}
+	if m.Runtime.ProcessCompose.LogRotation.MaxBackups <= 0 {
+		add("runtime.process_compose.log_rotation.max_backups", "must be positive")
+	}
 	if m.Terminal.Mode != "warp" && m.Terminal.Mode != "headless" {
 		add("terminal.mode", "must be warp or headless")
 	}

@@ -37,6 +37,7 @@ func Compile(m *manifest.Manifest, generationID string) (Artifacts, error) {
 		appendScalar(process, "command", "./wrappers/"+wrapperName)
 		appendScalar(process, "working_dir", ".")
 		appendScalar(process, "log_location", "./logs/"+wrapperName+".log")
+		appendLogConfiguration(process, m)
 		appendBool(process, "is_dotenv_disabled", true)
 		if service.Activation == "tab" {
 			appendBool(process, "disabled", true)
@@ -85,6 +86,7 @@ func Compile(m *manifest.Manifest, generationID string) (Artifacts, error) {
 		appendScalar(process, "command", "./wrappers/"+operation.name)
 		appendScalar(process, "working_dir", ".")
 		appendScalar(process, "log_location", "./logs/"+operation.name+".log")
+		appendLogConfiguration(process, m)
 		appendBool(process, "is_dotenv_disabled", true)
 		appendBool(process, "disabled", true)
 		appendScalar(process, "namespace", "maintenance")
@@ -162,6 +164,17 @@ func secondsCeil(value float64) int {
 		return 0
 	}
 	return int(math.Ceil(value))
+}
+
+func appendLogConfiguration(process *yaml.Node, m *manifest.Manifest) {
+	rotation := mappingNode()
+	appendInt(rotation, "max_size_mb", m.Runtime.ProcessCompose.LogRotation.MaxSizeMB)
+	appendInt(rotation, "max_age_days", secondsCeil(m.Runtime.LogRetention.Hours()/24))
+	appendInt(rotation, "max_backups", m.Runtime.ProcessCompose.LogRotation.MaxBackups)
+	appendBool(rotation, "compress", true)
+	configuration := mappingNode()
+	configuration.Content = append(configuration.Content, scalarNode("rotation"), rotation)
+	process.Content = append(process.Content, scalarNode("log_configuration"), configuration)
 }
 
 func mappingNode() *yaml.Node { return &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"} }

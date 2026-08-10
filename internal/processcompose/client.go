@@ -195,7 +195,7 @@ func redactedCommandError(err error, output []byte) error {
 	return fmt.Errorf("%w (subprocess output redacted)", err)
 }
 
-func ClientLog(projectDir string) string { return filepath.Join(projectDir, "client.log") }
+func InternalLog() string { return os.DevNull }
 
 func EnvironmentWithRuntime(base []string, executable, stateRoot, workspaceRoot, generationID string) []string {
 	result := make([]string, 0, len(base)+4)
