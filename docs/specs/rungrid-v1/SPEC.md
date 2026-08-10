@@ -110,6 +110,44 @@ planning, journal and executor, lifecycle command integration, recovery and
 uninstall behavior, then generic tests and delivery validation. The consumer
 lane follows only after the neutral lane is complete.
 
+### Conclusively dead runtime recovery
+
+Issue `#29` addresses an operator-visible crash-recovery gap discovered with a
+real multi-repository Platform manifest. The lifecycle journal can correctly
+retain `active` state and teardown intent after Process Compose exits, while
+the dead supervisor leaves `runtime.json` behind and removes its Unix socket.
+The prior reconciliation path rejected the stale PID before it could satisfy
+the journal's durable cleanup obligation, so every subsequent `rungrid up`
+failed without running `after_down` or starting a replacement runtime.
+
+Accepted behavior:
+
+- Recovery occurs only while the project lifecycle lock is held and only after
+  the private runtime record matches the selected project, generation, and
+  lifecycle journal identity.
+- The recorded PID must not exist and the exact expected runtime socket path
+  must be absent. Rungrid does not treat PID reuse, identity mismatch, a live
+  Process Compose process, or any present socket as recoverable.
+- Rungrid immediately re-reads the private record and repeats the PID and socket
+  absence checks before removing only `runtime.json`. It never signals a PID or
+  removes a socket during stale-record recovery.
+- The journal runtime identity is cleared, required `after_down` commands run
+  before any prerequisite is repeated, and ordinary startup may then create a
+  fresh runtime. Any mismatch or cleanup failure remains visible and
+  fail-closed.
+
+Accepted implementation plan:
+
+1. Add a supervisor operation that retires only an unchanged, project-owned
+   runtime record whose recorded process and expected socket are absent.
+2. Invoke that operation from lifecycle journal reconciliation after journal
+   and runtime identities match, then persist a cleared journal runtime
+   identity through the existing cleanup path.
+3. Add focused supervisor refusal tests plus lifecycle reconciliation coverage
+   proving teardown completes and startup may proceed after a dead runtime.
+4. Validate the fix against the real Platform manifest without modifying the
+   consumer repository or weakening live and ambiguous runtime protections.
+
 ## Declared repository roots
 
 Status: implemented and locally validated in `GH-14`.

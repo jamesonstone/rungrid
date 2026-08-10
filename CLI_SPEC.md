@@ -626,7 +626,14 @@ Before any mutating client call, Rungrid verifies all of the following:
 5. the runtime generation matches the intended operation.
 
 Mismatch is a stale-runtime error, not permission to signal an arbitrary PID or
-delete an arbitrary socket.
+delete an arbitrary socket. The sole automatic recovery is a conclusively dead
+runtime under the project lifecycle lock: the private runtime record and
+lifecycle journal must match the selected project and generation, the recorded
+PID must not exist, the expected socket path must be absent, and an immediate
+re-read must prove the record unchanged. Rungrid may then remove only the stale
+runtime record, clear the journal's runtime identity, finish any required
+teardown, and restart normally. A live PID, present socket, changed record, or
+identity mismatch remains a fail-closed conflict.
 
 ## 9. Lifecycle
 
@@ -636,7 +643,8 @@ delete an arbitrary socket.
 
 1. loads, merges, and validates the complete manifest before external mutation;
 2. acquires the exclusive project lifecycle lock and reconciles the journal
-   with exact runtime identity;
+   with exact runtime identity, retiring only a conclusively dead, unchanged
+   runtime record whose PID and socket are both absent;
 3. finishes any required cleanup before accepting a different generation;
 4. plans and generates, then atomically records `starting` and teardown intent;
 5. runs `before_up` sequentially in manifest order;

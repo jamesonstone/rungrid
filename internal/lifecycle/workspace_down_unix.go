@@ -71,7 +71,7 @@ func cleanupJournalLocked(ctx context.Context, layout state.Layout, journal *wor
 	}
 
 	var failures []string
-	runtimeState, runtimeExists, err := verifiedJournalRuntime(ctx, layout, *journal)
+	runtimeState, runtimeExists, err := verifiedJournalRuntime(ctx, layout, journal)
 	if err != nil {
 		return recordCleanupFailure(layout, journal, err)
 	}
@@ -178,7 +178,7 @@ func journalManifest(layout state.Layout, journal workspace.Journal) (*manifest.
 func verifiedJournalRuntime(
 	ctx context.Context,
 	layout state.Layout,
-	journal workspace.Journal,
+	journal *workspace.Journal,
 ) (supervisor.Runtime, bool, error) {
 	runtimeState, err := supervisor.Read(layout)
 	if errors.Is(err, os.ErrNotExist) {
@@ -198,8 +198,18 @@ func verifiedJournalRuntime(
 	if runtimeState.GenerationID != journal.GenerationID {
 		return supervisor.Runtime{}, false, errs.New(errs.ExitConflict, "RG1138", "runtime generation does not match lifecycle journal")
 	}
-	if journal.Runtime != nil && !runtimeIdentityMatches(*journal.Runtime, runtimeState) {
-		return supervisor.Runtime{}, false, errs.New(errs.ExitConflict, "RG1139", "runtime identity does not match lifecycle journal")
+	if journal.Runtime != nil {
+		if !runtimeIdentityMatches(*journal.Runtime, runtimeState) {
+			return supervisor.Runtime{}, false, errs.New(errs.ExitConflict, "RG1139", "runtime identity does not match lifecycle journal")
+		}
+		retired, err := supervisor.RetireStaleRuntime(layout, runtimeState)
+		if err != nil {
+			return supervisor.Runtime{}, false, err
+		}
+		if retired {
+			journal.Runtime = nil
+			return supervisor.Runtime{}, false, nil
+		}
 	}
 	if err := supervisor.Verify(ctx, layout, runtimeState); err != nil {
 		return supervisor.Runtime{}, false, err
