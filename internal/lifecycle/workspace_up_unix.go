@@ -117,7 +117,7 @@ func reconcileBeforeUp(
 		if filepath.Clean(journal.WorkspaceRoot) != filepath.Clean(loaded.WorkspaceRoot) {
 			return supervisor.Runtime{}, false, errs.New(errs.ExitConflict, "RG1145", "active lifecycle generation belongs to a different resolved workspace root")
 		}
-		runtimeState, active, verifyErr := verifiedJournalRuntime(ctx, layout, journal)
+		runtimeState, active, verifyErr := verifiedJournalRuntime(ctx, layout, &journal)
 		if verifyErr == nil && active {
 			return runtimeState, true, nil
 		}

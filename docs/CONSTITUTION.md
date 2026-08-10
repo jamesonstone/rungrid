@@ -34,7 +34,10 @@
 - External services are observed but never started or stopped by Rungrid.
 - Runtime state is project-scoped, private, atomic, and fail-closed. PID,
   process-start, socket, generation, owner, and content-hash checks protect
-  every mutation boundary they identify.
+  every mutation boundary they identify. Automatic crash recovery may retire
+  only an unchanged runtime record that matches the lifecycle journal after
+  both its recorded PID and expected socket are absent; that path never signals
+  a PID or removes a socket.
 - A project-scoped lock serializes global lifecycle mutation. Once startup may
   have changed external state, its journal retains teardown intent until every
   required cleanup command succeeds, even when the runtime record is missing.

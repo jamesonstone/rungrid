@@ -110,6 +110,44 @@ planning, journal and executor, lifecycle command integration, recovery and
 uninstall behavior, then generic tests and delivery validation. The consumer
 lane follows only after the neutral lane is complete.
 
+### Conclusively dead runtime recovery
+
+Issue `#29` addresses an operator-visible crash-recovery gap discovered with a
+real multi-repository Platform manifest. The lifecycle journal can correctly
+retain `active` state and teardown intent after Process Compose exits, while
+the dead supervisor leaves `runtime.json` behind and removes its Unix socket.
+The prior reconciliation path rejected the stale PID before it could satisfy
+the journal's durable cleanup obligation, so every subsequent `rungrid up`
+failed without running `after_down` or starting a replacement runtime.
+
+Accepted behavior:
+
+- Recovery occurs only while the project lifecycle lock is held and only after
+  the private runtime record matches the selected project, generation, and
+  lifecycle journal identity.
+- The recorded PID must not exist and the exact expected runtime socket path
+  must be absent. Rungrid does not treat PID reuse, identity mismatch, a live
+  Process Compose process, or any present socket as recoverable.
+- Rungrid immediately re-reads the private record and repeats the PID and socket
+  absence checks before removing only `runtime.json`. It never signals a PID or
+  removes a socket during stale-record recovery.
+- The journal runtime identity is cleared, required `after_down` commands run
+  before any prerequisite is repeated, and ordinary startup may then create a
+  fresh runtime. Any mismatch or cleanup failure remains visible and
+  fail-closed.
+
+Accepted implementation plan:
+
+1. Add a supervisor operation that retires only an unchanged, project-owned
+   runtime record whose recorded process and expected socket are absent.
+2. Invoke that operation from lifecycle journal reconciliation after journal
+   and runtime identities match, then persist a cleared journal runtime
+   identity through the existing cleanup path.
+3. Add focused supervisor refusal tests plus lifecycle reconciliation coverage
+   proving teardown completes and startup may proceed after a dead runtime.
+4. Validate the fix against the real Platform manifest without modifying the
+   consumer repository or weakening live and ambiguous runtime protections.
+
 ## Declared repository roots
 
 Status: implemented and locally validated in `GH-14`.
@@ -319,6 +357,19 @@ Local validation completed on macOS with Process Compose 1.120.0:
   escapes, overlay replacement, exact argument vectors, timeouts, cancellation,
   redaction, lock replacement, journaling, rollback, missing-runtime cleanup,
   retry and no-op teardown, and uninstall refusal while cleanup is required.
+- Issue `#29` adds supervisor refusal coverage for live PIDs and present socket
+  paths plus lifecycle reconciliation coverage for matched and unmatched stale
+  journal identities. `make check`, `make lint`, and `make vuln` pass after
+  integration with current `main`.
+- The real Platform `.rungrid.yaml` reproduced the stale PID with an `active`
+  journal, absent recorded process, and absent socket. The candidate completed
+  required teardown, reran prerequisites, started generation
+  `0ee1e54fd63b6582123d`, and reported an active verified runtime; the ordinary
+  installed command then reused that runtime successfully. Platform source was
+  not modified, and `--no-open` avoided a graphical side effect.
+- Clean-source headless lifecycle evidence for issue `#29` is recorded as run
+  `20260810T202921Z-024383` at merge commit `0ad699d`; the same commit passed a
+  release snapshot for all four supported OS/architecture targets.
 - Real mixed-service and tab-only headless runs prove prerequisites precede the
   supervisor, teardown follows it, repeated `up` does not repeat prerequisites,
   and Process Compose remains the managed-service lifecycle authority.
@@ -352,12 +403,15 @@ environment were unavailable where applicable.
 Rungrid v1 is implemented as a review candidate with the neutral contract,
 portable multi-repository workspace boundary, crash-safe one-shot lifecycle,
 Process Compose runtime, Warp/headless presentation, onboarding, tests, CI, and
-release packaging. A read-only agent instruction surface can now hand the
-portable integration contract and selected path hints to a coding agent before
-the manifest exists. Root and subcommand help now expose the same contract in a
-Rungrid-specific, workflow-grouped terminal presentation with a stable plain
-fallback. The neutral implementation is ready for a separately owned consumer
-cutover lane; this outcome does not claim consumer parity.
+release packaging. A conclusively dead Process Compose runtime can now retire
+only its unchanged journal-matched record, complete required teardown, and
+restart without weakening live-process or socket safety. A read-only agent
+instruction surface can now hand the portable integration contract and
+selected path hints to a coding agent before the manifest exists. Root and
+subcommand help now expose the same contract in a Rungrid-specific,
+workflow-grouped terminal presentation with a stable plain fallback. The
+neutral implementation is ready for a separately owned consumer cutover lane;
+this outcome does not claim consumer parity.
 
 Default-branch history was not rewritten:
 repository guardrails prohibit force pushing or mutating the default branch,

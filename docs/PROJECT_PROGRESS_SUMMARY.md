@@ -23,7 +23,7 @@ before loading broader history.
 
 | Feature | Source | Highest completed artifact | Status |
 | --- | --- | --- | --- |
-| `rungrid-v1` | `docs/specs/rungrid-v1/SPEC.md` | Integrated implementation on `GH-3` plus locally validated workspace-root and lifecycle extension on `GH-10`. | Ready for pull-request review; graphical smoke, license selection, release publication, and consumer cutover remain gated. |
+| `rungrid-v1` | `docs/specs/rungrid-v1/SPEC.md` | Integrated implementation on `GH-3`, workspace-root and lifecycle extension on `GH-10`, and locally validated dead-runtime recovery on `GH-29`. | Ready for pull-request review; graphical smoke, license selection, release publication, and consumer cutover remain gated. |
 | `repository-maintenance` | `docs/specs/repository-maintenance/SPEC.md` | Validated implementation on `GH-20`. | Ready for pull-request review; hosted checks remain. |
 | `repository-reconcile` | `docs/specs/repository-reconcile/SPEC.md` | Locally validated implementation on `GH-23`. | Ready for stacked pull-request review against `feat/up-sync-flag`; hosted checks remain. |
 | `bounded-local-runtime` | `docs/specs/bounded-local-runtime/SPEC.md` | Locally validated implementation on `GH-26`. | Ready for pull-request review; hosted checks remain. |
@@ -37,9 +37,10 @@ before loading broader history.
   neutral manifest and one truthful Process Compose lifecycle.
 - **IMPLEMENTED**: Portable manifest processing, safe generated state,
   multi-repository workspace roots, crash-safe one-shot prerequisites and
-  teardown, workspace/tab/external activation, detached managed-service
-  lifecycle, exclusive sessions, ordered Warp tabs, headless operation,
-  Versions, onboarding, tests, CI, and release packaging.
+  teardown, conclusively dead runtime-record recovery, workspace/tab/external
+  activation, detached managed-service lifecycle, exclusive sessions, ordered
+  Warp tabs, headless operation, Versions, onboarding, tests, CI, and release
+  packaging.
 - **OPEN ITEMS**: Review and merge, choose a license, observe hosted checks,
   perform a controlled Warp smoke, publish the release candidate, then deliver
   consumer migration separately. The protected-history rewrite is excluded.
@@ -88,9 +89,10 @@ before loading broader history.
 - The Go CLI implements the complete documented command surface, strict
   manifest merge and validation, XDG state, deterministic generation,
   symlink-aware workspace boundaries, lifecycle journaling and recovery,
-  Process Compose supervision, exact native and Compose execution, exclusive
-  sessions, Warp/headless presentation, Versions, repository maintenance,
-  onboarding, and uninstall.
+  fail-closed retirement of conclusively dead runtime records, Process Compose
+  supervision, exact native and Compose execution, exclusive sessions,
+  Warp/headless presentation, Versions, repository maintenance, onboarding,
+  and uninstall.
 - Unit, integration, race, golden, contract, fake-executable, and real
   Process Compose end-to-end suites cover the repository-owned boundaries.
 - GitHub Actions covers code-level gates, verified Process Compose lifecycle
@@ -110,6 +112,9 @@ before loading broader history.
 
 ## Last updated
 
+- 2026-08-10: Reproduced and fixed stale runtime PID recovery against the real
+  Platform manifest while preserving live PID, present socket, and unmatched
+  journal refusal paths.
 - 2026-08-10: Implemented and locally validated bounded managed-process logs
   and lower-overhead Versions monitoring for long-running workspaces.
 - 2026-08-09: Implemented and locally validated filesystem repository

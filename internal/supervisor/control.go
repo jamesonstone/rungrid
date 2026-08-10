@@ -43,12 +43,8 @@ func Write(layout state.Layout, runtimeState Runtime) error {
 }
 
 func Verify(ctx context.Context, layout state.Layout, runtimeState Runtime) error {
-	if runtimeState.APIVersion != "rungrid/output/v1" || runtimeState.ProjectID != layout.ProjectID {
-		return errs.New(errs.ExitConflict, "RG613", "runtime record belongs to another project or API")
-	}
-	expectedSocket := filepath.Join(layout.ProjectDir, "runtime.sock")
-	if filepath.Clean(runtimeState.Socket) != expectedSocket {
-		return errs.New(errs.ExitConflict, "RG614", "runtime socket path is outside the selected project state")
+	if err := verifyRecordScope(layout, runtimeState); err != nil {
+		return err
 	}
 	identity, command, err := inspectProcess(ctx, runtimeState.PID)
 	if err != nil {
@@ -72,6 +68,17 @@ func Verify(ctx context.Context, layout state.Layout, runtimeState Runtime) erro
 	defer cancel()
 	if err := Client(layout, runtimeState).Ping(pingContext); err != nil {
 		return errs.Wrap(errs.ExitConflict, "RG619", "runtime socket does not answer as the recorded Process Compose server", err)
+	}
+	return nil
+}
+
+func verifyRecordScope(layout state.Layout, runtimeState Runtime) error {
+	if runtimeState.APIVersion != "rungrid/output/v1" || runtimeState.ProjectID != layout.ProjectID {
+		return errs.New(errs.ExitConflict, "RG613", "runtime record belongs to another project or API")
+	}
+	expectedSocket := filepath.Join(layout.ProjectDir, "runtime.sock")
+	if filepath.Clean(runtimeState.Socket) != expectedSocket {
+		return errs.New(errs.ExitConflict, "RG614", "runtime socket path is outside the selected project state")
 	}
 	return nil
 }
