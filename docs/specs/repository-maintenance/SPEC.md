@@ -43,6 +43,14 @@ references:
     read_policy: must
     used_for: delivery ownership
     status: active
+  - id: workspace-discovery-fix
+    name: Implicit workspace discovery fix
+    type: issue
+    target: https://github.com/jamesonstone/rungrid/issues/31
+    relation: tracks
+    read_policy: must
+    used_for: service-bounded discovery when the workspace root is not a Git worktree
+    status: active
 skills: []
 delivery_intent: issue_branch_pr_ready
 ---
@@ -78,6 +86,14 @@ ownership.
   section with human and `rungrid/output/v1` JSON output.
 - Both commands act on all unique declared Git common directories or a
   repeatable `--repository` selection.
+- When the implicit `workspace` repository is not itself a Git worktree,
+  discover only the Git top-levels containing workspace-owned services'
+  resolved working directories. Deduplicate those top-levels by Git common
+  directory, report them by stable workspace-relative path, and never turn
+  this compatibility path into a recursive filesystem scan.
+- Keep `--repository workspace` as the aggregate selector for that inferred
+  compatibility inventory. Workspace-relative report names do not become new
+  logical selectors without matching manifest repository declarations.
 - Both commands apply by default. `--dry-run` is strictly non-mutating: it may
   query GitHub and the remote but must not fetch, update refs, write state,
   stop processes, remove files, or prune metadata.
@@ -159,6 +175,9 @@ ownership.
 8. Validate fake-executable arguments, real temporary remotes/worktrees, PTY
    session continuity, Process Compose visibility, complete repository checks,
    source-size compliance, sanitization, and headless lifecycle compatibility.
+9. Preserve sibling-workspace manifests created before named repository roots
+   by deriving the implicit maintenance inventory from workspace-owned service
+   working directories only when `workspace.root` is not a Git worktree.
 
 ## DECISIONS
 
@@ -182,6 +201,11 @@ ownership.
 - A declared logical repository may identify a directory inside a Git
   worktree. Maintenance deduplicates and protects the physical Git top-level,
   while service coordination maps nested declared roots back to that worktree.
+- The implicit `workspace` repository remains the first maintenance candidate.
+  If its root is not a Git worktree, configured workspace-owned service paths
+  are the only fallback inventory. This preserves existing sibling-workspace
+  manifests without weakening named repository validation or scanning
+  undeclared directories.
 
 ## DISCOVERIES
 
@@ -216,6 +240,11 @@ ownership.
   request because ordinary `git branch -d` cannot prove commit ancestry. The
   worktree removal remains truthful and the local branch is preserved as a
   partial result.
+- Sibling-workspace manifests can validly use a non-Git container as
+  `workspace.root` while leaving services on the implicit `workspace`
+  repository. Treating that container as the sole maintenance repository
+  prevents synchronization even though every service working directory is an
+  explicit, validated path into a Git worktree.
 
 ## VALIDATION
 
@@ -243,6 +272,26 @@ ownership.
   ordinary `make test` and full race suite passed.
 - The complete handwritten source/test audit found no file above 300 physical
   lines.
+- The focused maintenance regression passed against a non-Git workspace root
+  containing two real child repositories and bare remotes. It proved that
+  nested service directories deduplicate to two Git common directories and
+  that `Sync` completes without discovery failures.
+- The fixed CLI completed a live `sync --dry-run` against the sibling-workspace
+  manifest that exposed the defect. It reported all 13 configured repository
+  roots with no recursive discovery or Platform mutation.
+- `make check`, `make lint`, `make vuln`, the local headless end-to-end suite,
+  and `make release-snapshot` passed. The first `make check` attempt hit the
+  unchanged one-second workspace execution fixture under load; that isolated
+  test passed five consecutive runs and the complete rerun passed, including
+  race tests and all cross-builds.
+- The headless suite recorded PASS evidence at
+  `tmp/2026-08-11/rungrid-headless-e2e/2` with run ID
+  `20260811T153441Z-071409`, 345 output bytes, and asserted cleanup.
+- The current Kit CLI did not discover the repository's legacy nonnumeric spec
+  directories for feature or `--all` validation. `kit check --project`
+  separately retained ten pre-existing Kit-managed instruction findings; this
+  fix did not modify those support documents or claim that project check as a
+  pass.
 
 ## OUTCOME
 
@@ -264,18 +313,24 @@ revalidates live Git state immediately before ordinary removal, restores
 verified environment links on failure, and never force-deletes local or remote
 state.
 
+Manifest-scoped maintenance now also supports sibling workspaces whose root is
+an intentional non-Git container. Rungrid first preserves the implicit
+workspace-repository behavior, then falls back only to workspace-owned
+services' validated working directories when that root is not a Git worktree.
+It reports the inferred Git top-levels by workspace-relative path, deduplicates
+them by common directory, and never scans undeclared workspace content.
+
 ## REPOSITORY MEMORY
 
-Decision: created
+Decision: updated
 
-Rationale: Default-branch-only synchronization, destructive worktree proof,
-service-session cooperation, and the separation between CLI authorization and
-Process Compose presentation are consequential cross-component decisions that
-code and tests alone cannot fully explain.
+Rationale: The service-bounded compatibility behavior is a material extension
+of repository-maintenance inventory semantics. The existing feature spec and
+CLI contract now explain why non-Git sibling-workspace containers are supported
+without weakening declared repository validation or allowing recursive scans.
 
 Artifacts:
 
 - `docs/specs/repository-maintenance/SPEC.md`
-- `docs/CONSTITUTION.md`
-- `docs/PROJECT_PROGRESS_SUMMARY.md`
-- `docs/references/testing.md`
+- `CLI_SPEC.md`
+- `tests/RUN_STATUS.md`
