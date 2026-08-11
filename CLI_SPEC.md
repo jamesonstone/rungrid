@@ -992,10 +992,18 @@ rungrid sync [--repository <name>]... [--dry-run] [--json]
 ```
 
 Queries every unique declared Git common directory, fetches and prunes its
-configured remote, and fast-forwards only the local default branch. A checked
-out default branch must be clean and advances with `git merge --ff-only`; an
-unattached default ref advances only with an expected-old OID. Missing, ahead,
-diverged, dirty, unavailable, or concurrently changed branches are preserved.
+configured remote, and fast-forwards only the local default branch. If the
+implicit `workspace` repository is not a Git worktree, Rungrid inspects only
+the resolved working directories of workspace-owned services and deduplicates
+their containing Git top-levels; it does not recursively scan the workspace.
+Those inferred repositories are reported by workspace-relative top-level path.
+Selecting `--repository workspace` selects that complete inferred set; reported
+paths become individual selectors only when the manifest declares matching
+logical repository names.
+A checked-out default branch must be clean and advances with `git merge
+--ff-only`; an unattached default ref advances only with an expected-old OID.
+Missing, ahead, diverged, dirty, unavailable, or concurrently changed branches
+are preserved.
 
 Feature branches and their worktrees are never checked out, merged, rebased,
 reset, or stopped. If a running service uses the checked-out default worktree,

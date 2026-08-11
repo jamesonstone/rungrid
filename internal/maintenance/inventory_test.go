@@ -61,6 +61,85 @@ func TestDiscoverAcceptsDeclaredDirectoryInsideGitWorktree(t *testing.T) {
 	}
 }
 
+func TestDiscoverInfersWorkspaceRepositoriesFromServiceDirectories(t *testing.T) {
+	root := t.TempDir()
+	api := initializeInventoryRepository(t, root, "api")
+	web := initializeInventoryRepository(t, root, "web")
+	initializeInventoryRepository(t, root, "unconfigured")
+	for _, directory := range []string{filepath.Join(api, "services", "one"), filepath.Join(api, "services", "two")} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	configuration := manifest.Manifest{
+		Repositories: map[string]manifest.Repository{},
+		Services: []manifest.Service{
+			{Name: "api-one", WorkingDirectory: "api/services/one"},
+			{Name: "api-two", WorkingDirectory: "api/services/two"},
+			{Name: "web", WorkingDirectory: "web"},
+		},
+	}
+	configuration.ApplyDefaults()
+	loaded := &manifest.Loaded{Manifest: configuration, WorkspaceRoot: root, ManifestDir: api}
+	repositories, failures := Discover(context.Background(), loaded, nil, githubRunner{})
+	if len(failures) != 0 || len(repositories) != 2 {
+		t.Fatalf("repositories = %#v, failures = %#v", repositories, failures)
+	}
+	byName := make(map[string]Repository, len(repositories))
+	for _, repository := range repositories {
+		byName[repository.Name] = repository
+	}
+	physicalAPI, err := physicalPath(api)
+	if err != nil {
+		t.Fatal(err)
+	}
+	physicalWeb, err := physicalPath(web)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if byName["api"].TopLevel != physicalAPI || len(byName["api"].Aliases) != 0 || len(byName["api"].DeclaredPaths) != 2 {
+		t.Fatalf("inferred api repository = %#v", byName["api"])
+	}
+	if byName["web"].TopLevel != physicalWeb || len(byName["web"].Aliases) != 0 || len(byName["web"].DeclaredPaths) != 1 {
+		t.Fatalf("inferred web repository = %#v", byName["web"])
+	}
+	report, err := Sync(context.Background(), loaded, Options{DryRun: true}, githubRunner{}, nil)
+	if err != nil || len(report.Repositories) != 2 || len(report.Failures) != 0 {
+		t.Fatalf("sync report = %#v, error = %v", report, err)
+	}
+}
+
+func TestDiscoverRejectsNonGitDeclaredRepository(t *testing.T) {
+	root := t.TempDir()
+	declared := filepath.Join(root, "api")
+	if err := os.Mkdir(declared, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	loaded := loadedRepository(t, root, declared)
+	repositories, failures := Discover(context.Background(), loaded, nil, githubRunner{})
+	if len(repositories) != 0 || len(failures) != 1 || failures[0].Repository != "api" || failures[0].Error != errRepositoryNotWorktree.Error() {
+		t.Fatalf("repositories = %#v, failures = %#v", repositories, failures)
+	}
+}
+
+func initializeInventoryRepository(t *testing.T, root, name string) string {
+	t.Helper()
+	remote := filepath.Join(root, "."+name+".git")
+	directory := filepath.Join(root, name)
+	gitTest(t, root, "init", "--bare", "--initial-branch=main", remote)
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	gitTest(t, directory, "init", "--initial-branch=main")
+	configureGitUser(t, directory)
+	writeTestFile(t, filepath.Join(directory, "README.md"), name+"\n")
+	gitTest(t, directory, "add", "README.md")
+	gitTest(t, directory, "commit", "-m", "initial")
+	gitTest(t, directory, "remote", "add", "origin", remote)
+	gitTest(t, directory, "push", "-u", "origin", "main")
+	return directory
+}
+
 func TestGitHubSlugRejectsTraversalAndUnexpectedPaths(t *testing.T) {
 	for _, remote := range []string{
 		"git@github.com:../repository.git",
