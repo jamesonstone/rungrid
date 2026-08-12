@@ -263,6 +263,22 @@ runtime:
   startup_timeout: 45s
   shutdown_timeout: 20s
   log_retention: 168h
+  resource_guard:
+    sample_interval: 1s
+    learning_window: 15m
+    emergency_window: 3s
+    sustained_window: 1m
+    restart_limit: 3
+    restart_window: 1h
+    backoff_initial: 2s
+    backoff_maximum: 8s
+    emergency:
+      cpu_percent: 75
+      memory_percent: 50
+      processes: 512
+      threads: 2048
+      thread_growth: 512
+      thread_growth_window: 10s
   process_compose:
     executable: process-compose
     log_level: info
@@ -278,6 +294,23 @@ process logs rotate when they reach `max_size_mb`, retain at most
 `max_backups` compressed rollovers, and expire using `log_retention` rounded up
 to whole days. The safe defaults are 10 MB and one rollover. Process Compose
 internal diagnostics, which expose no rotation policy, are not persisted.
+
+The resource guard is enabled for every managed native or Compose service.
+It samples one batched host-process snapshot per interval. Three consecutive
+emergency samples trigger immediate containment. Healthy Running or Ready
+samples mature a service-specific P99 baseline after 15 minutes; only then can
+a continuous one-minute sustained breach trigger containment. Learned limits
+use `min(emergency, max(floor, P99 * multiplier, P99 + headroom))` and never
+raise an emergency ceiling. The sustained defaults are five percent CPU and
+memory floors, 32 processes, 128 threads, and 128 new threads per minute, with
+the multipliers and headroom defined by the generated schema.
+
+The global sample interval must be between 500 milliseconds and 10 seconds.
+All timing, threshold, process-count, restart, and backoff overrides are
+validated for ordering and safe bounds. A service may set `resource_guard` to
+override its effective policy except for the workspace-wide sample interval.
+An external service accepts policy only for reporting; it always remains
+`observe_only`, and no override grants signaling authority.
 
 ### 5.7 Terminal
 
@@ -363,6 +396,7 @@ Each service supports:
 - `depends_on` lifecycle requirements;
 - `health` readiness behavior;
 - `restart` policy;
+- optional validated `resource_guard` policy overrides;
 - `namespace` grouping metadata;
 - `terminal` tab behavior;
 - optional `ports` hints used only when process listener discovery is
@@ -417,6 +451,10 @@ external:
 
 External services are readiness dependencies only. Rungrid never starts,
 stops, restarts, or uninstalls them.
+
+The resource guard may report their readiness context and host observations,
+but never signals them. Lifecycle hooks remain responsible for any external
+startup or teardown they declare.
 
 ### 5.12 Activation
 
@@ -546,6 +584,10 @@ generations/<generation-id>/
 runtime.json
 lifecycle.json
 lifecycle-logs/<generation-id>/
+resource-guard/
+  baselines/
+  incidents/
+  status.json
 current
 sessions/
 tabs/
@@ -569,6 +611,14 @@ teardown is required it remains required until every configured `after_down`
 command completes successfully, even if the supervisor never started or its
 runtime record is absent. Command output is redacted and stored in private,
 generation-scoped lifecycle logs rather than deterministic artifacts.
+
+Resource-guard state is private and atomic. Every baseline, incident, status,
+control-client registration, and circuit-reset request carries the complete
+safe authority scope. Baselines are keyed by project, generation scope,
+service, and a redacted service command/configuration hash. Only bounded
+summaries are checkpointed. Incident records contain no command arguments,
+environment, secrets, or raw process output and expire according to
+`runtime.log_retention`.
 
 All state directories and files are user-only. Files are written to a sibling
 temporary file, synced when durability matters, permissioned, and atomically
@@ -603,6 +653,7 @@ The generated Process Compose configuration:
 
 - uses the recorded project-scoped Unix socket;
 - emits native and Compose wrappers as exact commands;
+- emits a hidden generation-scoped `rungrid-resource-guard` process;
 - marks tab-owned processes disabled;
 - emits disabled `maintenance` namespace jobs for authorized repository sync
   and worktree-prune requests;
@@ -620,8 +671,9 @@ The detached Process Compose daemon is authoritative for the active generation.
 `runtime.json` records:
 
 - project and generation IDs;
-- daemon PID and process start identity;
-- Unix socket path and socket identity;
+- normalized effective-manifest SHA-256;
+- daemon PID, process start identity, and command identity;
+- Unix socket path, owner, device, and inode;
 - Process Compose version;
 - generated configuration hash;
 - resolved workspace path;
@@ -634,6 +686,26 @@ Before any mutating client call, Rungrid verifies all of the following:
 3. the Unix socket is owned by the current user and has the recorded identity;
 4. the Process Compose server answers over that socket;
 5. the runtime generation matches the intended operation.
+
+Finite Process Compose operations use bounded HTTP over the verified Unix
+socket: liveness, get, and list queries have five-second maximums; start, stop,
+and project-down use operation-specific deadlines and bounded responses. The
+Process Compose executable remains only for daemon launch, log streaming, and
+TUI attachment. Streaming clients run in isolated process groups and register
+their project, generation, manifest, runtime, parent, process-start, operation,
+and optional service identity for resource monitoring.
+
+Every enforcement action is scoped by project ID, generation ID,
+effective-manifest hash, verified Process Compose runtime identity, and proven
+process ancestry. Filesystem location, executable name, port ownership, and
+service name are supporting observations only and never confer termination
+authority. If any scope or ownership proof is missing or changes, enforcement
+fails closed.
+
+The authority is the generated normalized effective manifest for the active
+generation, not the current source manifest, import, or local overlay. Source
+edits take effect only through normal reconciliation. Modification of the
+generated manifest or Process Compose configuration invalidates enforcement.
 
 Mismatch is a stale-runtime error, not permission to signal an arbitrary PID or
 delete an arbitrary socket. The sole automatic recovery is a conclusively dead
@@ -690,6 +762,12 @@ headless operators:
 Only one live owner may exist for a service in a generation. Stale ownership is
 reclaimed only after process identity checks prove the owner is gone.
 
+A matching session also quiesces and releases ownership when generation
+shutdown begins or its recorded runtime/socket identity disappears or changes.
+During an intentional resource restart, a verified owner remains active,
+prints each incident once, and waits for the service to return. A tab service
+without a verified owner remains stopped after containment.
+
 The session command returns to the shell when `rungrid stop <service>` stops its
 process. The operator may then run the configured trigger to start a new session
 in the same tab.
@@ -698,6 +776,10 @@ in the same tab.
 
 For a workspace-owned service, `rungrid start <service>` directly starts its
 Process Compose process and waits according to the configured readiness policy.
+An open resource circuit blocks ordinary start. The explicit
+`--reset-resource-circuit` flag closes the exact scope-verified service circuit
+after operator review; changing the effective service command/configuration
+identity also starts with a new baseline and circuit history.
 
 For a tab-owned service:
 
@@ -722,7 +804,8 @@ Starting or stopping one service never runs global lifecycle hooks.
 `rungrid down`:
 
 1. acquires the project lifecycle lock and records `stopping`;
-2. prevents new sessions;
+2. publishes the immutable generation shutdown marker, suppresses guard
+   restarts, and quiesces only matching sessions;
 3. stops tab-owned services in reverse dependency order;
 4. stops workspace-owned native services in reverse dependency order;
 5. runs the recorded exact Compose shutdown commands;
@@ -975,6 +1058,13 @@ readiness without mutation. It also reports lifecycle journal state, teardown
 requirement, completed prerequisites, and the latest sanitized cleanup failure,
 including when no supervisor exists.
 
+Status also reports the complete active guard authority scope and proof state,
+guard health, heartbeat and degraded reason, current metrics, baseline
+maturity, effective limits, resource-restart history, circuit state, and the
+latest service and control-plane incidents. Persisted incident summaries remain
+available when the Process Compose runtime is inactive. JSON carries the same
+fields in the `rungrid/output/v1` envelope.
+
 ### 11.10 logs
 
 ```text
@@ -1102,7 +1192,7 @@ stops/releases on ownership-ending signals.
 ### 11.15 start and stop
 
 ```text
-rungrid start <service>
+rungrid start <service> [--reset-resource-circuit]
 rungrid stop <service>
 ```
 
@@ -1129,6 +1219,9 @@ only this project's generated state. It does not remove the checked-in manifest,
 local overlay, external services, user shell configuration, Process Compose,
 Warp, or unrelated terminal files. `--keep-config` preserves generated config
 for diagnosis; it does not refer to the source manifest.
+
+`--keep-logs` also preserves redacted resource incidents while removing
+baselines, live status, client registrations, and pending reset requests.
 
 Uninstall refuses to discard a cleanup-required journal. It succeeds only
 after required teardown completes or when no teardown was ever required.

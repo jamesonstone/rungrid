@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jamesonstone/rungrid/internal/errs"
+	"github.com/jamesonstone/rungrid/internal/guardstate"
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/processcompose"
 	"github.com/jamesonstone/rungrid/internal/serviceexec"
@@ -33,18 +34,24 @@ func Open(ctx context.Context, active Active, service string) error {
 	return warp.Open(ctx, record, service)
 }
 
-func Start(ctx context.Context, active Active, serviceName string) (string, error) {
+func Start(ctx context.Context, active Active, serviceName string, resetResourceCircuit bool) (string, error) {
 	service, exists := manifest.FindService(active.Manifest, serviceName)
 	if !exists {
 		return "", errs.New(errs.ExitUsage, "RG1109", "unknown service: "+serviceName)
 	}
 	if service.Source == "external" {
+		if resetResourceCircuit {
+			return "", errs.New(errs.ExitUsage, "RG1128", "external services do not have a Rungrid resource circuit")
+		}
 		waitContext, cancel := context.WithTimeout(ctx, active.Manifest.Runtime.StartupTimeout.Duration)
 		defer cancel()
 		if err := serviceexec.WaitExternal(waitContext, active.Manifest, active.Runtime.WorkspaceRoot, service); err != nil {
 			return "", err
 		}
 		return "external service is ready; lifecycle remains external", nil
+	}
+	if err := prepareResourceCircuit(active, serviceName, resetResourceCircuit); err != nil {
+		return "", err
 	}
 	if service.Activation == "tab" {
 		if _, live := terminalshell.ActiveTab(active.Layout, active.Runtime.GenerationID, serviceName); live {
@@ -68,6 +75,26 @@ func Start(ctx context.Context, active Active, serviceName string) (string, erro
 		return "", err
 	}
 	return "service started", nil
+}
+
+func prepareResourceCircuit(active Active, serviceName string, reset bool) error {
+	scope := supervisor.AuthorityScope(active.Layout, active.Runtime)
+	status, exists, err := guardstate.ReadStatus(active.Layout)
+	if err != nil {
+		return err
+	}
+	if reset {
+		return guardstate.ResetCircuit(active.Layout, scope, serviceName)
+	}
+	if !exists || status.Scope != scope {
+		return nil
+	}
+	for _, service := range status.Services {
+		if service.Name == serviceName && service.CircuitState == "open" {
+			return errs.New(errs.ExitConflict, "RG1129", "resource circuit is open; retry with --reset-resource-circuit after reviewing the latest incident")
+		}
+	}
+	return nil
 }
 
 func Stop(ctx context.Context, active Active, serviceName string) error {

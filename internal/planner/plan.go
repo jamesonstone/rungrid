@@ -65,6 +65,7 @@ func Build(loaded *manifest.Loaded, generatorVersion string) Plan {
 			"manifest.yaml",
 			"plan.json",
 			"process-compose.yaml",
+			"wrappers/rungrid-resource-guard",
 			"wrappers/rungrid-maintenance-sync",
 			"wrappers/rungrid-maintenance-worktrees-prune",
 		},

@@ -3,11 +3,13 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/jamesonstone/rungrid/internal/procidentity"
@@ -123,4 +125,26 @@ func Active(layout state.Layout, generationID, service string) (Registration, bo
 		return Registration{}, false
 	}
 	return registration, true
+}
+
+func WaitGenerationReleased(ctx context.Context, layout state.Layout, generationID string, services []string) error {
+	ticker := time.NewTicker(25 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		owned := false
+		for _, service := range services {
+			if _, live := Active(layout, generationID, service); live {
+				owned = true
+				break
+			}
+		}
+		if !owned {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }

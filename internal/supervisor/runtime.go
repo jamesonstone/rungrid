@@ -18,31 +18,34 @@ import (
 )
 
 type Runtime struct {
-	APIVersion            string `json:"api_version"`
-	ProjectID             string `json:"project_id"`
-	GenerationID          string `json:"generation_id"`
-	PID                   int    `json:"pid"`
-	ProcessIdentity       string `json:"process_identity"`
-	ProcessCommand        string `json:"process_command"`
-	Socket                string `json:"socket"`
-	SocketDevice          uint64 `json:"socket_device"`
-	SocketInode           uint64 `json:"socket_inode"`
-	ProcessCompose        string `json:"process_compose"`
-	ProcessComposeVersion string `json:"process_compose_version"`
-	Configuration         string `json:"configuration"`
-	ConfigurationHash     string `json:"configuration_hash"`
-	WorkspaceRoot         string `json:"workspace_root"`
-	StartedAt             string `json:"started_at"`
+	APIVersion              string `json:"api_version"`
+	ProjectID               string `json:"project_id"`
+	GenerationID            string `json:"generation_id"`
+	EffectiveManifestSHA256 string `json:"effective_manifest_sha256"`
+	PID                     int    `json:"pid"`
+	ProcessIdentity         string `json:"process_identity"`
+	ProcessCommand          string `json:"process_command"`
+	Socket                  string `json:"socket"`
+	SocketDevice            uint64 `json:"socket_device"`
+	SocketInode             uint64 `json:"socket_inode"`
+	SocketOwnerUID          uint32 `json:"socket_owner_uid"`
+	ProcessCompose          string `json:"process_compose"`
+	ProcessComposeVersion   string `json:"process_compose_version"`
+	Configuration           string `json:"configuration"`
+	ConfigurationHash       string `json:"configuration_hash"`
+	WorkspaceRoot           string `json:"workspace_root"`
+	StartedAt               string `json:"started_at"`
 }
 
 type StartOptions struct {
-	Layout                state.Layout
-	GenerationID          string
-	WorkspaceRoot         string
-	ProcessCompose        string
-	ProcessComposeVersion string
-	RungridExecutable     string
-	StartupTimeout        time.Duration
+	Layout                  state.Layout
+	GenerationID            string
+	EffectiveManifestSHA256 string
+	WorkspaceRoot           string
+	ProcessCompose          string
+	ProcessComposeVersion   string
+	RungridExecutable       string
+	StartupTimeout          time.Duration
 }
 
 func Start(ctx context.Context, options StartOptions) (result Runtime, reused bool, returnErr error) {
@@ -66,6 +69,13 @@ func Start(ctx context.Context, options StartOptions) (result Runtime, reused bo
 	configurationContent, err := os.ReadFile(configuration)
 	if err != nil {
 		return Runtime{}, false, errs.Wrap(errs.ExitConflict, "RG602", "read generated Process Compose configuration", err)
+	}
+	manifestContent, err := os.ReadFile(filepath.Join(generationDirectory, "manifest.yaml"))
+	if err != nil {
+		return Runtime{}, false, errs.Wrap(errs.ExitConflict, "RG602", "read generated effective manifest", err)
+	}
+	if options.EffectiveManifestSHA256 == "" || state.Hash(manifestContent) != options.EffectiveManifestSHA256 {
+		return Runtime{}, false, errs.New(errs.ExitConflict, "RG602", "generated effective manifest hash does not match startup scope")
 	}
 	socket := filepath.Join(options.Layout.ProjectDir, "runtime.sock")
 	if _, err := os.Lstat(socket); err == nil {
@@ -103,6 +113,7 @@ func Start(ctx context.Context, options StartOptions) (result Runtime, reused bo
 			}
 			_ = os.Remove(filepath.Join(options.Layout.ProjectDir, "runtime.json"))
 		}
+		_ = processcompose.RemoveSocketAlias(socket)
 	}()
 	waitContext, cancel := context.WithTimeout(ctx, options.StartupTimeout)
 	defer cancel()
@@ -126,8 +137,9 @@ func Start(ctx context.Context, options StartOptions) (result Runtime, reused bo
 	}
 	runtimeState := Runtime{
 		APIVersion: "rungrid/output/v1", ProjectID: options.Layout.ProjectID, GenerationID: options.GenerationID,
-		PID: pid, ProcessIdentity: processIdentity, ProcessCommand: processCommand, Socket: socket,
-		SocketDevice: device, SocketInode: inode, ProcessCompose: options.ProcessCompose,
+		EffectiveManifestSHA256: options.EffectiveManifestSHA256,
+		PID:                     pid, ProcessIdentity: processIdentity, ProcessCommand: processCommand, Socket: socket,
+		SocketDevice: device, SocketInode: inode, SocketOwnerUID: uid, ProcessCompose: options.ProcessCompose,
 		ProcessComposeVersion: options.ProcessComposeVersion, Configuration: configuration,
 		ConfigurationHash: state.Hash(configurationContent), WorkspaceRoot: options.WorkspaceRoot, StartedAt: state.RuntimeTimestamp(),
 	}

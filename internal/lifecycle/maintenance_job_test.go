@@ -4,9 +4,10 @@ package lifecycle
 
 import (
 	"context"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,23 +17,32 @@ import (
 )
 
 func TestStartMaintenanceJobUsesAuthorizedProcessComposeProcess(t *testing.T) {
-	layout, err := state.NewLayout("example-k7m4q2", t.TempDir())
+	stateRoot, err := os.MkdirTemp("/tmp", "rg-maint-job-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(stateRoot) })
+	layout, err := state.NewLayout("example-k7m4q2", stateRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := layout.Ensure(); err != nil {
 		t.Fatal(err)
 	}
-	argumentsPath := filepath.Join(t.TempDir(), "arguments")
-	executable := filepath.Join(t.TempDir(), "process-compose")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$FAKE_ARGUMENTS\"\n"
-	if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
+	listener, err := net.Listen("unix", filepath.Join(layout.ProjectDir, "runtime.sock"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("FAKE_ARGUMENTS", argumentsPath)
+	requested := make(chan string, 1)
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		requested <- request.Method + " " + request.URL.Path
+		_, _ = w.Write([]byte(`{"name":"rungrid-maintenance-sync"}`))
+	})}
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() { _ = server.Close() })
 	active := Active{Layout: layout, Runtime: supervisor.Runtime{
 		ProjectID: "example-k7m4q2", GenerationID: "0123456789abcdefabcd",
-		ProcessCompose: executable, WorkspaceRoot: t.TempDir(),
+		WorkspaceRoot: t.TempDir(),
 	}}
 	workerDone := make(chan error, 1)
 	go func() {
@@ -63,12 +73,8 @@ func TestStartMaintenanceJobUsesAuthorizedProcessComposeProcess(t *testing.T) {
 	if !result.Success {
 		t.Fatalf("unexpected result: %#v", result)
 	}
-	arguments, err := os.ReadFile(argumentsPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(arguments), "process\nstart\n"+maintenance.SyncProcessName+"\n") {
-		t.Fatalf("unexpected Process Compose arguments: %q", arguments)
+	if operation := <-requested; operation != "POST /process/start/"+maintenance.SyncProcessName {
+		t.Fatalf("unexpected Process Compose request: %q", operation)
 	}
 }
 

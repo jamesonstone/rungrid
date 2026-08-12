@@ -70,7 +70,25 @@ func staleRuntimeFixture(t *testing.T) (state.Layout, Runtime) {
 		ProcessIdentity: "Mon Jan  1 00:00:00 2024",
 		ProcessCommand:  "process-compose -U -u ../../runtime.sock",
 		Socket:          filepath.Join(layout.ProjectDir, "runtime.sock"),
-		SocketDevice:    1, SocketInode: 2,
+		SocketDevice:    1, SocketInode: 2, SocketOwnerUID: uint32(os.Getuid()),
+	}
+	generation := filepath.Join(layout.ProjectDir, "generations", runtimeState.GenerationID)
+	if err := os.MkdirAll(generation, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	manifestContent := []byte("effective manifest\n")
+	configurationContent := []byte("process compose\n")
+	if err := os.WriteFile(filepath.Join(generation, "manifest.yaml"), manifestContent, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runtimeState.Configuration = filepath.Join(generation, "process-compose.yaml")
+	if err := os.WriteFile(runtimeState.Configuration, configurationContent, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runtimeState.EffectiveManifestSHA256 = state.Hash(manifestContent)
+	runtimeState.ConfigurationHash = state.Hash(configurationContent)
+	if err := state.WriteFileAtomic(layout.ProjectDir, "current", []byte(runtimeState.GenerationID+"\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 	if err := Write(layout, runtimeState); err != nil {
 		t.Fatal(err)

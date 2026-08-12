@@ -38,6 +38,16 @@
   only an unchanged runtime record that matches the lifecycle journal after
   both its recorded PID and expected socket are absent; that path never signals
   a PID or removes a socket.
+- Every enforcement action is scoped by project ID, generation ID,
+  effective-manifest hash, verified Process Compose runtime identity, and
+  proven process ancestry. Filesystem location, executable name, port
+  ownership, and service name are supporting observations only and never
+  confer termination authority. If any scope or ownership proof is missing or
+  changes, enforcement fails closed.
+- Resource enforcement owns only managed native and Compose host process trees
+  and registered Rungrid control clients from the exact generated scope.
+  External services, lifecycle hooks, manual processes, other projects, and
+  stale generations remain outside termination authority.
 - A project-scoped lock serializes global lifecycle mutation. Once startup may
   have changed external state, its journal retains teardown intent until every
   required cleanup command succeeds, even when the runtime record is missing.

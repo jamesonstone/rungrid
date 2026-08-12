@@ -68,6 +68,7 @@ func Schema() []byte {
         "startup_timeout": {"type": "string"},
         "shutdown_timeout": {"type": "string"},
         "log_retention": {"type": "string"},
+		"resource_guard": {"$ref": "#/$defs/resource_guard"},
         "process_compose": {
           "type": "object",
           "additionalProperties": false,
@@ -87,6 +88,22 @@ func Schema() []byte {
         "theme": {"type": "string"}
       }
     },
+	"adaptive_limit": {
+	  "type": "object", "additionalProperties": false,
+	  "properties": {"floor": {"type": "number", "exclusiveMinimum": 0}, "multiplier": {"type": "number", "minimum": 1}, "headroom": {"type": "number", "exclusiveMinimum": 0}}
+	},
+	"resource_limits": {
+	  "type": "object", "additionalProperties": false,
+	  "properties": {"cpu_percent": {"type": "number", "exclusiveMinimum": 0, "maximum": 100}, "memory_percent": {"type": "number", "exclusiveMinimum": 0, "maximum": 100}, "processes": {"type": "integer", "minimum": 1}, "threads": {"type": "integer", "minimum": 1}, "thread_growth": {"type": "integer", "minimum": 1}, "thread_growth_window": {"type": "string"}}
+	},
+	"adaptive_limits": {
+	  "type": "object", "additionalProperties": false,
+	  "properties": {"cpu": {"$ref": "#/$defs/adaptive_limit"}, "memory": {"$ref": "#/$defs/adaptive_limit"}, "processes": {"$ref": "#/$defs/adaptive_limit"}, "threads": {"$ref": "#/$defs/adaptive_limit"}, "thread_growth": {"type": "integer", "minimum": 1}, "thread_growth_window": {"type": "string"}}
+	},
+	"resource_guard": {
+	  "type": "object", "additionalProperties": false,
+	  "properties": {"sample_interval": {"type": "string"}, "learning_window": {"type": "string"}, "emergency_window": {"type": "string"}, "sustained_window": {"type": "string"}, "restart_limit": {"type": "integer", "minimum": 1}, "restart_window": {"type": "string"}, "backoff_initial": {"type": "string"}, "backoff_maximum": {"type": "string"}, "emergency": {"$ref": "#/$defs/resource_limits"}, "sustained": {"$ref": "#/$defs/adaptive_limits"}}
+	},
     "provider": {
       "type": "object",
       "additionalProperties": false,
@@ -186,6 +203,7 @@ func Schema() []byte {
             "backoff": {"type": "string"}
           }
         },
+		"resource_guard": {"$ref": "#/$defs/resource_guard"},
         "namespace": {"type": "string"},
         "terminal": {
           "type": "object",

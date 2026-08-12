@@ -27,6 +27,7 @@ before loading broader history.
 | `repository-maintenance` | `docs/specs/repository-maintenance/SPEC.md` | Validated implementation on `GH-20`. | Ready for pull-request review; hosted checks remain. |
 | `repository-reconcile` | `docs/specs/repository-reconcile/SPEC.md` | Locally validated implementation on `GH-23`. | Ready for stacked pull-request review against `feat/up-sync-flag`; hosted checks remain. |
 | `bounded-local-runtime` | `docs/specs/bounded-local-runtime/SPEC.md` | Locally validated implementation on `GH-26`. | Ready for pull-request review; hosted checks remain. |
+| `runtime-resource-guard` | `docs/specs/runtime-resource-guard/SPEC.md` | Locally validated implementation and Platform compatibility on `GH-33`. | The required 24-hour Platform soak remains before pull-request delivery. |
 
 ## FEATURE SUMMARIES
 
@@ -84,6 +85,19 @@ before loading broader history.
 - **OPEN ITEMS**: Review the ready pull request and observe hosted checks.
 - **POINTER**: `docs/specs/bounded-local-runtime/SPEC.md`
 
+### Runtime resource guard
+
+- **STATUS**: implementation validation
+- **INTENT**: Eliminate runaway finite Process Compose clients and contain
+  resource breaches only inside one immutable, identity-verified generation.
+- **IMPLEMENTED**: Bounded Unix-socket HTTP control, session quiescence,
+  effective-manifest authority, managed-tree and control-client monitoring,
+  adaptive limits, graceful and verified signal escalation, bounded restarts,
+  circuit recovery, persisted redacted incidents, and status reporting.
+- **OPEN ITEMS**: Complete a minimum 24-hour Platform soak before opening the
+  pull request; hosted checks remain unavailable until delivery.
+- **POINTER**: `docs/specs/runtime-resource-guard/SPEC.md`
+
 ## Current implementation
 
 - The Go CLI implements the complete documented command surface, strict
@@ -93,6 +107,10 @@ before loading broader history.
   supervision, exact native and Compose execution, exclusive sessions,
   Warp/headless presentation, Versions, repository maintenance, onboarding,
   and uninstall.
+- Runtime control uses bounded Unix-socket HTTP for finite Process Compose
+  operations. The generation-scoped resource guard enforces only exact
+  identity- and ancestry-proven managed trees; external and manual processes
+  remain observation-only.
 - Unit, integration, race, golden, contract, fake-executable, and real
   Process Compose end-to-end suites cover the repository-owned boundaries.
 - GitHub Actions covers code-level gates, verified Process Compose lifecycle
@@ -112,6 +130,8 @@ before loading broader history.
 
 ## Last updated
 
+- 2026-08-12: Implemented the GH-33 runtime resource guard and began full,
+  Platform, and time-bound soak validation.
 - 2026-08-10: Reproduced and fixed stale runtime PID recovery against the real
   Platform manifest while preserving live PID, present socket, and unmatched
   journal refusal paths.

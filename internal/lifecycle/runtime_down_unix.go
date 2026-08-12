@@ -8,9 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jamesonstone/rungrid/internal/errs"
+	"github.com/jamesonstone/rungrid/internal/guardstate"
 	"github.com/jamesonstone/rungrid/internal/serviceexec"
+	"github.com/jamesonstone/rungrid/internal/session"
 	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
 )
@@ -28,8 +31,20 @@ func stopRuntime(ctx context.Context, active Active) error {
 	if err := state.WriteFileAtomic(active.Layout.ProjectDir, markerRelative, marker, 0o600); err != nil {
 		return err
 	}
+	// The immutable generation shutdown marker is authoritative. Resource guard
+	// status is observational and must not prevent an otherwise safe teardown.
+	_ = guardstate.MarkShutdown(active.Layout, active.Runtime.GenerationID)
 	markerPath := filepath.Join(active.Layout.ProjectDir, markerRelative)
 	defer func() { _ = os.Remove(markerPath) }()
+	serviceNames := make([]string, 0, len(active.Manifest.Services))
+	for _, service := range active.Manifest.Services {
+		if service.Source != "external" {
+			serviceNames = append(serviceNames, service.Name)
+		}
+	}
+	quiesceContext, cancelQuiesce := context.WithTimeout(ctx, 3*time.Second)
+	_ = session.WaitGenerationReleased(quiesceContext, active.Layout, active.Runtime.GenerationID, serviceNames)
+	cancelQuiesce()
 
 	client := supervisor.Client(active.Layout, active.Runtime)
 	var failures []string

@@ -58,14 +58,15 @@ func Run(ctx context.Context, options Options) (returnErr error) {
 			cancel()
 		}
 	}()
-	follower, err := startLogFollower(client, options.Service, options.Stdin, options.Stdout, options.Stderr)
+	follower, err := startLogFollower(options.Layout, options.Runtime, client, options.Service, options.Stdin, options.Stdout, options.Stderr)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = follower.stop() }()
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
-	started, paused := false, false
+	started, paused, resourcePaused := false, false, false
+	lastIncidentID := ""
 	var pausedRequest maintenanceRequest
 	for {
 		select {
@@ -80,6 +81,12 @@ func Run(ctx context.Context, options Options) (returnErr error) {
 			return errs.Wrap(errs.ExitInterrupted, "RG812", "service session interrupted", ctx.Err())
 		case <-follower.channel():
 			logErr := follower.err()
+			if reason := quiesceReason(options); reason != "" {
+				owned = false
+				follower = nil
+				_, _ = fmt.Fprintf(options.Stdout, "\n[rungrid] %s session released: %s\n", options.Service, reason)
+				return nil
+			}
 			if request, exists := readMaintenanceRequest(options.Layout, lock.identity); exists && request.Action == "pause" {
 				follower = nil
 				if err := pauseSession(context.Background(), options, client, request); err != nil {
@@ -88,11 +95,41 @@ func Run(ctx context.Context, options Options) (returnErr error) {
 				paused, pausedRequest = true, request
 				continue
 			}
+			if waiting, incident := resourceRestartWaiting(options); waiting {
+				follower = nil
+				resourcePaused = true
+				lastIncidentID = printResourceIncident(options.Stdout, incident, lastIncidentID)
+				continue
+			}
 			if logErr != nil && !errors.Is(logErr, context.Canceled) {
 				return errs.Wrap(errs.ExitFailure, "RG813", "service log foreground ended", logErr)
 			}
 			return nil
 		case <-ticker.C:
+			if reason := quiesceReason(options); reason != "" {
+				owned = false
+				_ = follower.stop()
+				_, _ = fmt.Fprintf(options.Stdout, "\n[rungrid] %s session released: %s\n", options.Service, reason)
+				return nil
+			}
+			if waiting, incident := resourceRestartWaiting(options); waiting {
+				lastIncidentID = printResourceIncident(options.Stdout, incident, lastIncidentID)
+				if !resourcePaused {
+					_ = follower.stop()
+					follower = nil
+					resourcePaused = true
+				}
+				current, getErr := client.Get(ctx, options.Service)
+				if getErr != nil || !isRunning(current.Status) {
+					continue
+				}
+				resumed, followerErr := startLogFollower(options.Layout, options.Runtime, client, options.Service, options.Stdin, options.Stdout, options.Stderr)
+				if followerErr != nil {
+					return followerErr
+				}
+				follower, resourcePaused, started = resumed, false, true
+				continue
+			}
 			request, hasRequest := readMaintenanceRequest(options.Layout, lock.identity)
 			if hasRequest && request.Action == "pause" && !paused {
 				_ = follower.stop()
@@ -121,6 +158,18 @@ func Run(ctx context.Context, options Options) (returnErr error) {
 				continue
 			}
 			if paused {
+				continue
+			}
+			if resourcePaused {
+				current, getErr := client.Get(ctx, options.Service)
+				if getErr != nil || !isRunning(current.Status) {
+					continue
+				}
+				resumed, followerErr := startLogFollower(options.Layout, options.Runtime, client, options.Service, options.Stdin, options.Stdout, options.Stderr)
+				if followerErr != nil {
+					return followerErr
+				}
+				follower, resourcePaused, started = resumed, false, true
 				continue
 			}
 			current, getErr := client.Get(ctx, options.Service)
@@ -185,7 +234,7 @@ func resumeSession(ctx context.Context, options Options, client processcompose.C
 		ackErr := acknowledgeMaintenance(options.Layout, request, "failed", err)
 		return nil, errors.Join(err, ackErr)
 	}
-	follower, err := startLogFollower(client, options.Service, options.Stdin, options.Stdout, options.Stderr)
+	follower, err := startLogFollower(options.Layout, options.Runtime, client, options.Service, options.Stdin, options.Stdout, options.Stderr)
 	if err != nil {
 		ackErr := acknowledgeMaintenance(options.Layout, request, "failed", err)
 		return nil, errors.Join(err, ackErr)

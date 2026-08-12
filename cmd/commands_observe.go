@@ -154,6 +154,15 @@ func newStatusCommand(opt *options) *cobra.Command {
 					}
 				}
 				workspaceStatus.Services = filtered
+				if workspaceStatus.ResourceGuard != nil {
+					guardServices := workspaceStatus.ResourceGuard.Services[:0]
+					for _, item := range workspaceStatus.ResourceGuard.Services {
+						if wanted[item.Name] {
+							guardServices = append(guardServices, item)
+						}
+					}
+					workspaceStatus.ResourceGuard.Services = guardServices
+				}
 			}
 			if opt.json {
 				return output.WriteJSON(command.OutOrStdout(), "Status", layout.ProjectID, workspaceStatus, nil)
@@ -167,6 +176,9 @@ func newStatusCommand(opt *options) *cobra.Command {
 					_, _ = fmt.Fprintf(command.OutOrStdout(), "  generation %s", workspaceStatus.Generation)
 				}
 				_, _ = fmt.Fprintln(command.OutOrStdout())
+				if workspaceStatus.RuntimeVerification != "" {
+					_, _ = fmt.Fprintf(command.OutOrStdout(), "runtime verification: %s\n", workspaceStatus.RuntimeVerification)
+				}
 				if workspaceStatus.Lifecycle != nil {
 					_, _ = fmt.Fprintf(
 						command.OutOrStdout(),
@@ -188,13 +200,45 @@ func newStatusCommand(opt *options) *cobra.Command {
 						)
 					}
 				}
+				if guard := workspaceStatus.ResourceGuard; guard != nil {
+					_, _ = fmt.Fprintf(command.OutOrStdout(), "resource guard %s  scope-valid=%t  heartbeat=%s", guard.Health, guard.AuthorityValid, guard.HeartbeatAt)
+					if guard.DegradedReason != "" {
+						_, _ = fmt.Fprintf(command.OutOrStdout(), "  degraded=%s", guard.DegradedReason)
+					}
+					_, _ = fmt.Fprintf(command.OutOrStdout(), "  guard-pid=%d cpu=%.1f%% rss=%d sampler=%.1fms\n", guard.GuardPID, guard.GuardCPUPercent, guard.GuardRSSBytes, guard.SamplerDurationMS)
+					_, _ = fmt.Fprintf(
+						command.OutOrStdout(),
+						"  scope project=%s generation=%s manifest=%s runtime-pid=%d socket=%s\n",
+						guard.Scope.ProjectID,
+						guard.Scope.GenerationID,
+						shortHash(guard.Scope.EffectiveManifestSHA256),
+						guard.Scope.RuntimePID,
+						guard.Scope.SocketPath,
+					)
+					if incident := guard.LatestControlIncident; incident != nil {
+						_, _ = fmt.Fprintf(command.OutOrStdout(), "  latest control incident=%s trigger=%s action=%s\n", incident.OccurredAt, incident.Trigger, incident.Action)
+					}
+				}
 				for _, item := range workspaceStatus.Services {
 					_, _ = fmt.Fprintf(command.OutOrStdout(), "%-20s %-10s %-9s %-14s pid=%d health=%s session=%t tab=%t\n", item.Name, item.Source, item.Activation, item.Status, item.PID, item.Health, item.SessionOwned, item.TabRegistered)
+					if guard := item.ResourceGuard; guard != nil {
+						_, _ = fmt.Fprintf(command.OutOrStdout(), "  guard=%s enforcement=%s scope-valid=%t cpu=%.1f%%/%.1f%% memory=%.1f%%/%.1f%% processes=%d/%d threads=%d/%d learning=%s mature=%t restarts=%d circuit=%s\n", guard.State, guard.Enforcement, guard.AuthorityValid, guard.Metrics.CPUPercent, guard.EffectiveLimits.CPUPercent, guard.Metrics.MemoryPercent, guard.EffectiveLimits.MemoryPercent, guard.Metrics.Processes, guard.EffectiveLimits.Processes, guard.Metrics.Threads, guard.EffectiveLimits.Threads, guard.Baseline.HealthyDuration, guard.Baseline.Mature, guard.RestartCount, guard.CircuitState)
+						if guard.LatestIncident != nil {
+							_, _ = fmt.Fprintf(command.OutOrStdout(), "  latest incident=%s tier=%s trigger=%s action=%s\n", guard.LatestIncident.OccurredAt, guard.LatestIncident.Tier, guard.LatestIncident.Trigger, guard.LatestIncident.Action)
+						}
+					}
 				}
 			}
 			return nil
 		},
 	}
+}
+
+func shortHash(value string) string {
+	if len(value) <= 12 {
+		return value
+	}
+	return value[:12]
 }
 
 func newLogsCommand(opt *options) *cobra.Command {

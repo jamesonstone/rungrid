@@ -1,5 +1,5 @@
 Project: example-workspace-k7m4q2
-Generation: 5ee8ecf64872b90d445d
+Generation: 2086f788b27a388562bc
 Manifest directory: .
 Workspace root: ..
 Terminal: headless
@@ -27,6 +27,7 @@ Artifacts:
   manifest.yaml
   plan.json
   process-compose.yaml
+  wrappers/rungrid-resource-guard
   wrappers/rungrid-maintenance-sync
   wrappers/rungrid-maintenance-worktrees-prune
   wrappers/api

@@ -11,6 +11,7 @@ import (
 
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/state"
+	"github.com/jamesonstone/rungrid/internal/supervisor"
 	"github.com/jamesonstone/rungrid/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
@@ -55,6 +56,12 @@ func lifecycleFixture(
 	if err := state.WriteFileAtomic(layout.ProjectDir, manifestRelative, content, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := state.WriteFileAtomic(layout.ProjectDir, filepath.Join("generations", generation, "process-compose.yaml"), []byte("process compose\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.WriteFileAtomic(layout.ProjectDir, "current", []byte(generation+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	journal := workspace.NewJournal(
 		layout.ProjectID,
 		generation,
@@ -67,6 +74,23 @@ func lifecycleFixture(
 		t.Fatal(err)
 	}
 	return layout, journal
+}
+
+func completeRuntimeScope(t *testing.T, layout state.Layout, generationID string, runtimeState *supervisor.Runtime) {
+	t.Helper()
+	manifestContent, err := os.ReadFile(filepath.Join(layout.ProjectDir, "generations", generationID, "manifest.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration := filepath.Join(layout.ProjectDir, "generations", generationID, "process-compose.yaml")
+	configurationContent, err := os.ReadFile(configuration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeState.EffectiveManifestSHA256 = state.Hash(manifestContent)
+	runtimeState.Configuration = configuration
+	runtimeState.ConfigurationHash = state.Hash(configurationContent)
+	runtimeState.SocketOwnerUID = uint32(os.Getuid())
 }
 
 func lifecycleCommand(name string, argv ...string) manifest.LifecycleCommand {

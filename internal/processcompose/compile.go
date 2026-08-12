@@ -75,6 +75,21 @@ func Compile(m *manifest.Manifest, generationID string) (Artifacts, error) {
 		processes.Content = append(processes.Content, scalarNode(service.Name), process)
 		result.Wrappers[wrapperName] = wrapperScript(m.Project.ID, generationID, service.Name, false)
 	}
+	guardName := "rungrid-resource-guard"
+	guardProcess := mappingNode()
+	appendScalar(guardProcess, "command", "./wrappers/"+guardName)
+	appendScalar(guardProcess, "working_dir", ".")
+	appendScalar(guardProcess, "log_location", "./logs/"+guardName+".log")
+	appendLogConfiguration(guardProcess, m)
+	appendBool(guardProcess, "is_dotenv_disabled", true)
+	appendScalar(guardProcess, "namespace", "rungrid-internal")
+	guardAvailability := mappingNode()
+	appendScalar(guardAvailability, "restart", "on_failure")
+	appendInt(guardAvailability, "backoff_seconds", 1)
+	appendInt(guardAvailability, "max_restarts", 3)
+	guardProcess.Content = append(guardProcess.Content, scalarNode("availability"), guardAvailability)
+	processes.Content = append(processes.Content, scalarNode(guardName), guardProcess)
+	result.Wrappers[guardName] = resourceGuardWrapperScript(m.Project.ID, generationID)
 	for _, operation := range []struct {
 		name      string
 		operation string
@@ -115,6 +130,10 @@ func Compile(m *manifest.Manifest, generationID string) (Artifacts, error) {
 
 func maintenanceWrapperScript(projectID, generationID, operation string) []byte {
 	return []byte(fmt.Sprintf("#!/bin/sh\nset -eu\n: \"${RUNGRID_EXECUTABLE:=rungrid}\"\nexec \"$RUNGRID_EXECUTABLE\" internal maintenance-worker --project-id %s --generation %s --operation %s\n", projectID, generationID, operation))
+}
+
+func resourceGuardWrapperScript(projectID, generationID string) []byte {
+	return []byte(fmt.Sprintf("#!/bin/sh\nset -eu\n: \"${RUNGRID_EXECUTABLE:=rungrid}\"\nexec \"$RUNGRID_EXECUTABLE\" internal resource-guard-worker --project-id %s --generation %s\n", projectID, generationID))
 }
 
 func wrapperScript(projectID, generationID, service string, health bool) []byte {

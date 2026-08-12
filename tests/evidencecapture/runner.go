@@ -103,7 +103,7 @@ func runEvidence(options runnerOptions) (testResult, string, error) {
 
 func newResult(options runnerOptions, runNumber int, started, finished time.Time, outcome commandOutcome, output *boundedFile) testResult {
 	result := "PASS"
-	assertion := "Headless lifecycle, runtime identity, generation guard, exclusive sessions, restart, and shutdown passed."
+	assertion := "Headless lifecycle, runtime identity, session quiescence, emergency and sustained resource containment, circuit reset, external-process survival, and exact shutdown passed."
 	if outcome.exitCode != 0 {
 		result = "FAIL"
 		assertion = "The Go end-to-end test failed; inspect output.txt."

@@ -79,7 +79,9 @@ func inspectProcess(ctx context.Context, pid int) (string, string, error) {
 	if pid <= 1 || !processExists(pid) {
 		return "", "", errs.New(errs.ExitConflict, "RG628", "runtime process does not exist")
 	}
-	identityResult, err := subprocess.Run(exec.CommandContext(ctx, "ps", "-o", "lstart=", "-p", strconv.Itoa(pid)))
+	identityCommand := exec.CommandContext(ctx, "ps", "-o", "lstart=", "-p", strconv.Itoa(pid))
+	identityCommand.Env = cLocaleEnvironment(os.Environ())
+	identityResult, err := subprocess.Run(identityCommand)
 	if err != nil {
 		return "", "", errs.Wrap(errs.ExitConflict, "RG629", "inspect runtime process start identity", err)
 	}
@@ -87,12 +89,22 @@ func inspectProcess(ctx context.Context, pid int) (string, string, error) {
 	if err != nil {
 		return "", "", errs.Wrap(errs.ExitConflict, "RG630", "inspect runtime process command", err)
 	}
-	identity := strings.TrimSpace(string(identityResult.Stdout))
+	identity := strings.Join(strings.Fields(string(identityResult.Stdout)), " ")
 	command := strings.TrimSpace(string(commandResult.Stdout))
 	if identity == "" || command == "" || !strings.Contains(strings.ToLower(command), "process-compose") {
 		return "", "", errs.New(errs.ExitConflict, "RG631", "runtime PID is not Process Compose")
 	}
 	return identity, command, nil
+}
+
+func cLocaleEnvironment(environment []string) []string {
+	result := make([]string, 0, len(environment)+1)
+	for _, value := range environment {
+		if !strings.HasPrefix(value, "LC_ALL=") && !strings.HasPrefix(value, "LANG=") {
+			result = append(result, value)
+		}
+	}
+	return append(result, "LC_ALL=C")
 }
 
 func inspectSocket(filename string) (uint64, uint64, uint32, error) {

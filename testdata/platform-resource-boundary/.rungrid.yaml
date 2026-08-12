@@ -1,0 +1,23 @@
+api_version: rungrid/v1
+kind: Workspace
+project:
+  name: LSMC Platform Local
+  slug: lsmc-platform-local
+  id: lsmc-platform-local-r7g4k2
+terminal:
+  mode: headless
+  open: false
+services:
+  - name: postgres
+    source: external
+    activation: workspace
+    external: {command: {argv: ["true"]}}
+  - name: localstack
+    source: external
+    activation: workspace
+    external: {command: {argv: ["true"]}}
+  - name: aquarium
+    source: native
+    activation: tab
+    run: {argv: [sleep, "300"]}
+    terminal: {trigger_argv: [make, dev]}

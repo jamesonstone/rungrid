@@ -75,6 +75,11 @@ func uninstallPreserving(layout state.Layout, keepLogs, keepConfig bool) error {
 		}
 	}
 	remove := []string{"sessions", "tabs", "locks", "terminal-install.json", "runtime.json", "runtime.sock"}
+	if keepLogs {
+		remove = append(remove, filepath.Join("resource-guard", "baselines"), filepath.Join("resource-guard", "clients"), filepath.Join("resource-guard", "resets"), filepath.Join("resource-guard", "status.json"))
+	} else {
+		remove = append(remove, "resource-guard")
+	}
 	if !keepConfig {
 		remove = append(remove, "generations", "current", "lifecycle.json")
 	}
