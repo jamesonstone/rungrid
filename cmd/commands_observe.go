@@ -69,7 +69,7 @@ func newVersionsCommand(opt *options) *cobra.Command {
 			}
 			client := supervisor.Client(active.Layout, active.Runtime)
 			if !watch && !once && !opt.json {
-				watch = isTerminalOutput(command.OutOrStdout())
+				watch = isTerminalWriter(command.OutOrStdout())
 			}
 			if opt.json || once || !watch {
 				snapshot := versions.Capture(command.Context(), active.Manifest, active.Runtime, client)
@@ -87,29 +87,20 @@ func newVersionsCommand(opt *options) *cobra.Command {
 	return command
 }
 
-func isTerminalOutput(writer any) bool {
-	file, ok := writer.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := file.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
-}
-
 func watchVersions(command *cobra.Command, active lifecycle.Active) error {
 	ctx, cancel := signal.NotifyContext(command.Context(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	collector := versions.NewCollector()
+	display := newVersionsWatchDisplay(command.OutOrStdout(), isTerminalWriter(command.OutOrStdout()))
+	display.open()
+	defer display.close()
 	var previous versions.Snapshot
 	for {
 		snapshot := collector.Capture(ctx, active.Manifest, active.Runtime, supervisor.Client(active.Layout, active.Runtime))
 		if previous.CapturedAt == "" || !versions.MateriallyEqual(previous, snapshot) {
-			if previous.CapturedAt != "" {
-				_, _ = fmt.Fprint(command.OutOrStdout(), "\033[H\033[J")
-			}
-			versions.WriteHuman(command.OutOrStdout(), snapshot)
+			display.render(snapshot)
 			previous = snapshot
 		}
 		select {

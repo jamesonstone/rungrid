@@ -1048,7 +1048,10 @@ rungrid versions [--watch|--once] [--json]
 ```
 
 Displays the Versions surface described above. Human terminal output defaults
-to watch; redirected output defaults to once.
+to watch; redirected output defaults to once. Interactive watch mode uses the
+terminal's alternate screen, renders its first frame from the top, and restores
+the prior screen and cursor when it exits. Explicit watch output redirected to
+a file or pipe remains plain text without terminal control sequences.
 
 ### 11.9 status
 

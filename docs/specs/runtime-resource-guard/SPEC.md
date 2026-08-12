@@ -263,6 +263,10 @@ invalidates the guard scope.
   the managed baseline markers remain intact.
 - The required minimum 24-hour Platform soak is pending. Pull-request delivery
   stays blocked until it passes; no hosted checks or PR state are claimed.
+- Soak run 6 was intentionally canceled after 30 minutes when the operator
+  requested a stacked Versions full-screen correction. Its partial metrics are
+  superseded and are not acceptance evidence; the soak must restart from the
+  exact corrected commit.
 
 ## OUTCOME
 
