@@ -11,7 +11,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/state"
 )
 
-func TestStatusAndBaselineRequireExactScopeAndIdentity(t *testing.T) {
+func TestStatusAndBaselineRequireStableGenerationAndIdentity(t *testing.T) {
 	layout := guardLayout(t)
 	scope := testScope()
 	status := Status{ProjectID: layout.ProjectID, GenerationID: scope.GenerationID, Scope: scope, Health: "healthy"}
@@ -28,6 +28,18 @@ func TestStatusAndBaselineRequireExactScopeAndIdentity(t *testing.T) {
 	}
 	if _, exists, err := ReadBaseline(layout, scope, "api", "identity"); err != nil || !exists {
 		t.Fatalf("exact baseline did not load: %t, %v", exists, err)
+	}
+	rotated := scope
+	rotated.RuntimePID++
+	rotated.RuntimeProcessIdentity = "new runtime"
+	rotated.SocketInode++
+	if _, exists, err := ReadBaseline(layout, rotated, "api", "identity"); err != nil || !exists {
+		t.Fatalf("stable generation baseline did not survive runtime rotation: %t, %v", exists, err)
+	}
+	changedCommand := rotated
+	changedCommand.RuntimeCommandSHA256 = "changed"
+	if _, exists, err := ReadBaseline(layout, changedCommand, "api", "identity"); err != nil || exists {
+		t.Fatalf("changed runtime command reused baseline: %t, %v", exists, err)
 	}
 	if _, exists, err := ReadBaseline(layout, scope, "api", "changed"); err != nil || exists {
 		t.Fatalf("changed service identity reused the previous baseline: %t, %v", exists, err)

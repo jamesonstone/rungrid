@@ -61,10 +61,28 @@ func ReadBaseline(layout state.Layout, scope AuthorityScope, service, identity s
 	if err != nil || !exists {
 		return Baseline{}, exists, err
 	}
-	if baseline.APIVersion != apiVersion || baseline.Scope != scope || baseline.Service != service || baseline.ServiceIdentity != identity {
+	if baseline.APIVersion != apiVersion || baseline.Scope.ProjectID != layout.ProjectID ||
+		baseline.Service != service || baseline.ServiceIdentity != identity {
 		return Baseline{}, false, errs.New(errs.ExitConflict, "RG1304", "resource guard baseline scope does not match")
 	}
+	if !SameEffectiveGeneration(baseline.Scope, scope) {
+		return Baseline{}, false, nil
+	}
 	return baseline, true, nil
+}
+
+// SameEffectiveGeneration permits learning and circuit history to survive a
+// normal runtime restart. Ephemeral PID, process-start, and socket-inode proofs
+// remain recorded as provenance but never become authority for the new runtime.
+func SameEffectiveGeneration(left, right AuthorityScope) bool {
+	return left.ProjectID == right.ProjectID &&
+		left.GenerationID == right.GenerationID &&
+		left.EffectiveManifestSHA256 == right.EffectiveManifestSHA256 &&
+		left.RuntimeCommandSHA256 == right.RuntimeCommandSHA256 &&
+		left.SocketPath == right.SocketPath &&
+		left.SocketOwnerUID == right.SocketOwnerUID &&
+		left.SocketDevice == right.SocketDevice &&
+		left.ProcessComposeConfigHash == right.ProcessComposeConfigHash
 }
 
 func WriteIncident(layout state.Layout, incident Incident, retention time.Duration) error {

@@ -56,6 +56,9 @@
   `start` or `stop` commands.
 - Generated terminal files may be replaced or removed only when their ownership
   marker and last recorded content hash match.
+- A generation shutdown marker quiesces only that generation's owning sessions
+  and managed tab shells. Each releases its private registration and child
+  process before teardown; another project or generation remains untouched.
 - Headless operation must not require or generate graphical terminal state.
 - Coding-agent instructions are read-only guidance. They must not inspect or
   execute supplied project paths, replace the manifest as configuration

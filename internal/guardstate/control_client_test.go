@@ -47,3 +47,25 @@ func TestControlClientRegistrationRejectsUnknownOperation(t *testing.T) {
 		t.Fatal("unsafe unbounded query operation was registered")
 	}
 }
+
+func TestPruneExitedControlClientsRemovesOnlyDeadRegistrations(t *testing.T) {
+	layout := guardLayout(t)
+	command := exec.Command("sleep", "10")
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RegisterControlClient(layout, testScope(), command, "attach", "", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Kill(-command.Process.Pid, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	_ = command.Wait()
+	if err := PruneExitedControlClients(layout); err != nil {
+		t.Fatal(err)
+	}
+	if clients, err := ListControlClients(layout, testScope()); err != nil || len(clients) != 0 {
+		t.Fatalf("dead client registration remains: %#v, %v", clients, err)
+	}
+}

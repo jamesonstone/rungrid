@@ -16,6 +16,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/session"
 	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
+	"github.com/jamesonstone/rungrid/internal/terminalshell"
 )
 
 func stopRuntime(ctx context.Context, active Active) error {
@@ -44,6 +45,7 @@ func stopRuntime(ctx context.Context, active Active) error {
 	}
 	quiesceContext, cancelQuiesce := context.WithTimeout(ctx, 3*time.Second)
 	_ = session.WaitGenerationReleased(quiesceContext, active.Layout, active.Runtime.GenerationID, serviceNames)
+	_ = terminalshell.WaitGenerationReleased(quiesceContext, active.Layout, active.Runtime.GenerationID, serviceNames)
 	cancelQuiesce()
 
 	client := supervisor.Client(active.Layout, active.Runtime)

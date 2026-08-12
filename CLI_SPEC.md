@@ -764,6 +764,9 @@ reclaimed only after process identity checks prove the owner is gone.
 
 A matching session also quiesces and releases ownership when generation
 shutdown begins or its recorded runtime/socket identity disappears or changes.
+The containing managed tab shell observes the same exact generation boundary,
+terminates its child shell, and releases its tab registration; a shell from
+another project or generation is unaffected.
 During an intentional resource restart, a verified owner remains active,
 prints each incident once, and waits for the service to return. A tab service
 without a verified owner remains stopped after containment.
@@ -805,7 +808,7 @@ Starting or stopping one service never runs global lifecycle hooks.
 
 1. acquires the project lifecycle lock and records `stopping`;
 2. publishes the immutable generation shutdown marker, suppresses guard
-   restarts, and quiesces only matching sessions;
+   restarts, and quiesces only matching sessions and managed tab shells;
 3. stops tab-owned services in reverse dependency order;
 4. stops workspace-owned native services in reverse dependency order;
 5. runs the recorded exact Compose shutdown commands;

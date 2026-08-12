@@ -68,20 +68,10 @@ func RegisterControlClient(
 }
 
 func (r *ClientRegistration) Release() error {
-	var current ControlClient
-	exists, err := readPrivateJSON(r.path, &current)
-	if err != nil || !exists || current != r.expected {
-		return err
-	}
-	if err := os.Remove(r.path); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
+	return removeControlClientFile(r.path, r.expected)
 }
 
-func RemoveControlClient(layout state.Layout, expected ControlClient) error {
-	name := fmt.Sprintf("%s-%d.json", expected.Scope.GenerationID, expected.PID)
-	path := filepath.Join(layout.ProjectDir, "resource-guard", "clients", name)
+func removeControlClientFile(path string, expected ControlClient) error {
 	var current ControlClient
 	exists, err := readPrivateJSON(path, &current)
 	if err != nil || !exists {
@@ -94,6 +84,12 @@ func RemoveControlClient(layout state.Layout, expected ControlClient) error {
 		return err
 	}
 	return nil
+}
+
+func RemoveControlClient(layout state.Layout, expected ControlClient) error {
+	name := fmt.Sprintf("%s-%d.json", expected.Scope.GenerationID, expected.PID)
+	path := filepath.Join(layout.ProjectDir, "resource-guard", "clients", name)
+	return removeControlClientFile(path, expected)
 }
 
 func ListControlClients(layout state.Layout, scope AuthorityScope) ([]ControlClient, error) {
@@ -120,6 +116,37 @@ func ListControlClients(layout state.Layout, scope AuthorityScope) ([]ControlCli
 		}
 	}
 	return result, nil
+}
+
+func PruneExitedControlClients(layout state.Layout) error {
+	directory := filepath.Join(layout.ProjectDir, "resource-guard", "clients")
+	entries, err := os.ReadDir(directory)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		var record ControlClient
+		exists, readErr := readPrivateJSON(filepath.Join(directory, entry.Name()), &record)
+		if readErr != nil {
+			return readErr
+		}
+		if !exists || record.APIVersion != apiVersion || record.Scope.ProjectID != layout.ProjectID {
+			continue
+		}
+		if !procidentity.Matches(record.PID, record.ProcessIdentity) {
+			path := filepath.Join(directory, entry.Name())
+			if err := removeControlClientFile(path, record); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func inspectClientProcess(pid int) (int, int, int, string, error) {

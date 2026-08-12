@@ -111,6 +111,9 @@ func awaitRuntime(ctx context.Context, runtimeContext serviceexec.Context) (supe
 }
 
 func (w *worker) initialize() error {
+	if err := guardstate.PruneExitedControlClients(w.layout); err != nil {
+		return err
+	}
 	previous, hasPrevious, err := guardstate.ReadStatus(w.layout)
 	if err != nil {
 		return err
@@ -125,7 +128,7 @@ func (w *worker) initialize() error {
 			return err
 		}
 		monitor.baseline = baseline
-		if hasPrevious && previous.Scope == w.scope {
+		if hasPrevious && guardstate.SameEffectiveGeneration(previous.Scope, w.scope) {
 			monitor.restore(previous)
 		}
 		w.monitors[service.Name] = monitor

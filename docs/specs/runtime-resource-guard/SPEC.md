@@ -150,7 +150,8 @@ invalidates the guard scope.
 2. Replace query and lifecycle CLI calls with a bounded Unix-socket HTTP
    gateway using operation-specific deadlines and response limits.
 3. Strengthen session registration and teardown so exact-generation sessions
-   quiesce instead of retrying a missing or changed runtime.
+   and their managed tab shells quiesce instead of retrying or surviving a
+   missing or changed runtime.
 4. Add private authority-scope, process-snapshot, baseline, incident, circuit,
    and status components. Register and isolate the remaining streaming clients.
 5. Implement fail-closed containment, graceful stop, verified TERM/KILL
@@ -204,6 +205,12 @@ invalidates the guard scope.
   exited or PID-reused streaming control client loses its exact registration;
   uncertain ancestry or mixed group ownership remains recorded and simply
   disables enforcement.
+- Healthy learning and circuit history survive a normal runtime rotation only
+  when project, generation, effective manifest, runtime command, socket
+  location/owner/device, generated configuration, and service identity remain
+  unchanged. The old runtime PID, start identity, and socket inode remain
+  provenance but never grant authority to the replacement runtime; any stable
+  identity change resets the persisted state fail closed.
 - An isolated Process Compose TUI process group must be made the controlling
   terminal's foreground group atomically during fork. Assigning only a new
   process group lets Darwin suspend the client for background terminal access
@@ -229,8 +236,14 @@ invalidates the guard scope.
 - A Darwin pseudo-terminal integration test proves that an isolated attach
   client owns the terminal foreground while it runs and that Rungrid restores
   the prior foreground process group afterward.
-- Immutable local E2E evidence run `20260812T133932Z-068238` passed in 159
-  seconds at `tmp/2026-08-12/rungrid-headless-e2e/4` against the final
+- Managed tab-shell tests prove that the exact generation shutdown marker
+  terminates the child shell and releases its tab registration.
+- Guard initialization prunes an exited or PID-reused control-client
+  registration from any old scope only after its recorded process-start
+  identity no longer matches; it never signals during this private-state
+  cleanup.
+- Immutable local E2E evidence run `20260812T145024Z-005243` passed in 161
+  seconds at `tmp/2026-08-12/rungrid-headless-e2e/6` against the final
   validation tree.
 - `make check`, `make lint`, `make vuln`, and `make release-snapshot` pass. The
   checks include vet, all unit/integration tests, race tests, sanitization,
@@ -239,9 +252,11 @@ invalidates the guard scope.
   plan, generated normalized manifest, and Process Compose configuration
   validate. The generated configuration contains Aquarium and the hidden guard
   but no PostgreSQL or LocalStack managed process entries.
-- A 30-second validation-only soak smoke passed with zero restarts or circuits,
-  0.03 percent average guard CPU, 28 MiB peak guard-plus-sampler RSS, 208 ms
-  sampler p99, and approximately 5 KiB of guard state.
+- A graphical 30-second validation-only soak smoke passed after a same-
+  generation runtime rotation with zero restarts or circuits, 0.033 percent
+  average guard CPU, 29.6 MiB peak guard-plus-sampler RSS, 197.64 ms sampler
+  p99, and 55.5 KiB of guard state. The Overview rendered live status/logs,
+  and exact teardown left no managed tab shell, session, or attach client.
 - `kit check --project` remains blocked by 11 pre-existing stale Kit-managed
   instruction findings outside this feature's source, docs, and delivery
   scope. The feature-specific Constitution changes were reviewed directly and
