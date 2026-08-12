@@ -77,8 +77,16 @@ func Attach(ctx context.Context, active Active, readOnly bool, stdin io.Reader, 
 }
 
 func runRegisteredStream(active Active, command *exec.Cmd, operation, service string) error {
+	restoreTerminal := func() error { return nil }
+	if operation == "attach" {
+		var err error
+		restoreTerminal, err = prepareTerminalForeground(command)
+		if err != nil {
+			return err
+		}
+	}
 	if err := command.Start(); err != nil {
-		return err
+		return errors.Join(err, restoreTerminal())
 	}
 	registration, err := guardstate.RegisterControlClient(
 		active.Layout,
@@ -93,10 +101,10 @@ func runRegisteredStream(active Active, command *exec.Cmd, operation, service st
 			_ = command.Process.Kill()
 		}
 		_ = command.Wait()
-		return err
+		return errors.Join(err, restoreTerminal())
 	}
 	defer func() { _ = registration.Release() }()
-	return command.Wait()
+	return errors.Join(command.Wait(), restoreTerminal())
 }
 
 func Status(ctx context.Context, active Active) ([]ServiceStatus, json.RawMessage, error) {

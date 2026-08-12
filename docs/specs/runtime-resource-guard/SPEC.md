@@ -204,6 +204,11 @@ invalidates the guard scope.
   exited or PID-reused streaming control client loses its exact registration;
   uncertain ancestry or mixed group ownership remains recorded and simply
   disables enforcement.
+- An isolated Process Compose TUI process group must be made the controlling
+  terminal's foreground group atomically during fork. Assigning only a new
+  process group lets Darwin suspend the client for background terminal access
+  before the Overview can draw; Rungrid restores its prior foreground group
+  after the TUI exits.
 
 ## VALIDATION
 
@@ -221,6 +226,9 @@ invalidates the guard scope.
   incident reporting, and exact cleanup.
 - Real sustained E2E passes after a one-minute healthy baseline and records a
   process-count containment 60 seconds after the anomalous tree is observed.
+- A Darwin pseudo-terminal integration test proves that an isolated attach
+  client owns the terminal foreground while it runs and that Rungrid restores
+  the prior foreground process group afterward.
 - Immutable local E2E evidence run `20260812T133932Z-068238` passed in 159
   seconds at `tmp/2026-08-12/rungrid-headless-e2e/4` against the final
   validation tree.
