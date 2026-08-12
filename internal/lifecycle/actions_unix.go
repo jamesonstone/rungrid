@@ -66,6 +66,14 @@ func Start(ctx context.Context, active Active, serviceName string, resetResource
 		return "opened the absent service tab; its managed shell is acquiring ownership", nil
 	}
 	client := supervisor.Client(active.Layout, active.Runtime)
+	if resetResourceCircuit {
+		stopContext, cancel := context.WithTimeout(ctx, active.Manifest.Runtime.ShutdownTimeout.Duration)
+		err := waitForServiceStopped(stopContext, client.Get, serviceName)
+		cancel()
+		if err != nil {
+			return "", err
+		}
+	}
 	if err := client.Start(ctx, serviceName); err != nil {
 		return "", err
 	}
@@ -75,6 +83,23 @@ func Start(ctx context.Context, active Active, serviceName string, resetResource
 		return "", err
 	}
 	return "service started", nil
+}
+
+func waitForServiceStopped(ctx context.Context, get func(context.Context, string) (processcompose.ProcessState, error), serviceName string) error {
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		stateValue, err := get(ctx, serviceName)
+		status := strings.ToLower(stateValue.Status)
+		if err == nil && !shouldStop(status) && !strings.Contains(status, "stop") {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return errs.Wrap(errs.ExitNotReady, "RG1119", "service did not finish resource containment: "+serviceName, ctx.Err())
+		case <-ticker.C:
+		}
+	}
 }
 
 func prepareResourceCircuit(active Active, serviceName string, reset bool) error {

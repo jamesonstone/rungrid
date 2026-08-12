@@ -216,6 +216,10 @@ invalidates the guard scope.
   process group lets Darwin suspend the client for background terminal access
   before the Overview can draw; Rungrid restores its prior foreground group
   after the TUI exits.
+- Circuit state becomes visible before the current containment stop and
+  escalation finish. Explicit reset recovery therefore waits, within the
+  configured shutdown timeout, for Process Compose to leave its stopping state
+  before requesting a manual start.
 
 ## VALIDATION
 
@@ -231,6 +235,8 @@ invalidates the guard scope.
   TERM-resistant KILL escalation, three 500 ms/1 s/2 s restarts, fourth-breach
   circuits, explicit reset, manual/external process survival, inactive-runtime
   incident reporting, and exact cleanup.
+- The explicit circuit-reset E2E reproduces the stop/start race and passes with
+  the bounded containment-completion wait.
 - Real sustained E2E passes after a one-minute healthy baseline and records a
   process-count containment 60 seconds after the anomalous tree is observed.
 - A Darwin pseudo-terminal integration test proves that an isolated attach
