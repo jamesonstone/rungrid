@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -88,6 +89,10 @@ func newVersionsCommand(opt *options) *cobra.Command {
 }
 
 func watchVersions(command *cobra.Command, active lifecycle.Active) error {
+	return watchVersionsWhileRuntimeActive(command, active, versionsRuntimeActive)
+}
+
+func watchVersionsWhileRuntimeActive(command *cobra.Command, active lifecycle.Active, runtimeActive func(state.Layout, supervisor.Runtime) bool) error {
 	ctx, cancel := signal.NotifyContext(command.Context(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
@@ -98,6 +103,9 @@ func watchVersions(command *cobra.Command, active lifecycle.Active) error {
 	defer display.close()
 	var previous versions.Snapshot
 	for {
+		if !runtimeActive(active.Layout, active.Runtime) {
+			return nil
+		}
 		snapshot := collector.Capture(ctx, active.Manifest, active.Runtime, supervisor.Client(active.Layout, active.Runtime))
 		if previous.CapturedAt == "" || !versions.MateriallyEqual(previous, snapshot) {
 			display.render(snapshot)
@@ -109,6 +117,14 @@ func watchVersions(command *cobra.Command, active lifecycle.Active) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+func versionsRuntimeActive(layout state.Layout, runtimeState supervisor.Runtime) bool {
+	marker := filepath.Join(layout.ProjectDir, "locks", "down-"+runtimeState.GenerationID+".json")
+	if _, err := os.Lstat(marker); err == nil || !os.IsNotExist(err) {
+		return false
+	}
+	return supervisor.StaticScopeMatches(layout, runtimeState)
 }
 
 func newStatusCommand(opt *options) *cobra.Command {

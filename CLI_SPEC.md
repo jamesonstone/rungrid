@@ -1051,7 +1051,9 @@ Displays the Versions surface described above. Human terminal output defaults
 to watch; redirected output defaults to once. Interactive watch mode uses the
 terminal's alternate screen, renders its first frame from the top, and restores
 the prior screen and cursor when it exits. Explicit watch output redirected to
-a file or pipe remains plain text without terminal control sequences.
+a file or pipe remains plain text without terminal control sequences. A watch
+exits cleanly when its generation begins shutdown or its recorded runtime scope
+disappears or changes.
 
 ### 11.9 status
 
