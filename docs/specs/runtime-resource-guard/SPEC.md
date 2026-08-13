@@ -267,12 +267,25 @@ invalidates the guard scope.
   instruction findings outside this feature's source, docs, and delivery
   scope. The feature-specific Constitution changes were reviewed directly and
   the managed baseline markers remain intact.
-- The required minimum 24-hour Platform soak is pending. Pull-request delivery
-  stays blocked until it passes; no hosted checks or PR state are claimed.
+- Pull request #34 is open and its checks passed at `c444883`; merge remains
+  blocked until the required minimum 24-hour Platform soak passes against the
+  final corrected commit.
 - Soak run 6 was intentionally canceled after 30 minutes when the operator
   requested a stacked Versions full-screen correction. Its partial metrics are
   superseded and are not acceptance evidence; the soak must restart from the
   exact corrected commit.
+- Platform soak run 13 exposed a normal-load Darwin snapshot deadline defect:
+  the sampler was healthy but briefly took 504 milliseconds, exceeding the
+  default one-second interval's former half-interval deadline. The canceled
+  `ps` process made the guard fail closed and recover on its next sample, but
+  correctly invalidated the uninterrupted acceptance run. Snapshot execution
+  remains bounded to at most two seconds; its deadline now permits one full
+  configured interval, with a 500-millisecond minimum, while sampler p99
+  remains independently constrained to 250 milliseconds by soak acceptance.
+- Run 13 failed after 16 minutes with zero resource restarts or circuit
+  openings when the snapshot deadline canceled `ps`. Its immutable evidence is
+  retained at `tmp/2026-08-12/rungrid-resource-guard-soak/13/`; it is diagnostic
+  evidence only and cannot be combined with the replacement acceptance run.
 
 ## OUTCOME
 

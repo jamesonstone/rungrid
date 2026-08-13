@@ -261,9 +261,9 @@ func (b *boundedBuffer) Write(content []byte) (int, error) {
 }
 
 func snapshotContext(parent context.Context, interval time.Duration) (context.Context, context.CancelFunc) {
-	timeout := interval / 2
-	if timeout < 250*time.Millisecond {
-		timeout = 250 * time.Millisecond
+	timeout := interval
+	if timeout < 500*time.Millisecond {
+		timeout = 500 * time.Millisecond
 	}
 	if timeout > 2*time.Second {
 		timeout = 2 * time.Second

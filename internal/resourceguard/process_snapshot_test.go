@@ -3,8 +3,10 @@
 package resourceguard
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jamesonstone/rungrid/internal/guardstate"
 )
@@ -100,5 +102,29 @@ func TestParseCPUTime(t *testing.T) {
 		if err != nil || actual != expected {
 			t.Errorf("parseCPUTime(%q)=%v,%v want %v", input, actual, err, expected)
 		}
+	}
+}
+
+func TestSnapshotContextUsesBoundedFullInterval(t *testing.T) {
+	for name, test := range map[string]struct {
+		interval time.Duration
+		expected time.Duration
+	}{
+		"minimum":  {interval: 100 * time.Millisecond, expected: 500 * time.Millisecond},
+		"interval": {interval: time.Second, expected: time.Second},
+		"maximum":  {interval: 10 * time.Second, expected: 2 * time.Second},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := snapshotContext(context.Background(), test.interval)
+			defer cancel()
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Fatal("snapshot context has no deadline")
+			}
+			remaining := time.Until(deadline)
+			if remaining < test.expected-100*time.Millisecond || remaining > test.expected {
+				t.Fatalf("snapshot deadline remaining %s, want %s", remaining, test.expected)
+			}
+		})
 	}
 }
