@@ -78,6 +78,7 @@ type Runtime struct {
 	ShutdownTimeout Duration              `yaml:"shutdown_timeout,omitempty" json:"shutdown_timeout"`
 	LogRetention    Duration              `yaml:"log_retention,omitempty" json:"log_retention"`
 	ProcessCompose  ProcessComposeRuntime `yaml:"process_compose,omitempty" json:"process_compose"`
+	ResourceGuard   ResourceGuard         `yaml:"resource_guard,omitempty" json:"resource_guard"`
 }
 
 type ProcessComposeRuntime struct {
@@ -113,6 +114,7 @@ type Service struct {
 	Namespace        string            `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 	Terminal         ServiceTerminal   `yaml:"terminal,omitempty" json:"terminal"`
 	Ports            []int             `yaml:"ports,omitempty" json:"ports,omitempty"`
+	ResourceGuard    *ResourceGuard    `yaml:"resource_guard,omitempty" json:"resource_guard,omitempty"`
 }
 
 type Command struct {
@@ -174,127 +176,3 @@ type ServiceTerminal struct {
 }
 
 func Bool(value bool) *bool { return &value }
-
-func (m *Manifest) ApplyDefaults() {
-	if m.Project.Slug == "" {
-		m.Project.Slug = Slug(m.Project.Name)
-	}
-	if m.Workspace.Root == "" {
-		m.Workspace.Root = "."
-	}
-	if m.Runtime.StartupTimeout.Duration == 0 {
-		m.Runtime.StartupTimeout.Duration = 45 * time.Second
-	}
-	if m.Runtime.ShutdownTimeout.Duration == 0 {
-		m.Runtime.ShutdownTimeout.Duration = 20 * time.Second
-	}
-	if m.Runtime.LogRetention.Duration == 0 {
-		m.Runtime.LogRetention.Duration = 168 * time.Hour
-	}
-	if m.Runtime.ProcessCompose.Executable == "" {
-		m.Runtime.ProcessCompose.Executable = "process-compose"
-	}
-	if m.Runtime.ProcessCompose.LogLevel == "" {
-		m.Runtime.ProcessCompose.LogLevel = "info"
-	}
-	if m.Runtime.ProcessCompose.LogRotation.MaxSizeMB == 0 {
-		m.Runtime.ProcessCompose.LogRotation.MaxSizeMB = 10
-	}
-	if m.Runtime.ProcessCompose.LogRotation.MaxBackups == 0 {
-		m.Runtime.ProcessCompose.LogRotation.MaxBackups = 1
-	}
-	if m.Terminal.Mode == "" {
-		m.Terminal.Mode = "warp"
-	}
-	if m.Terminal.Open == nil {
-		m.Terminal.Open = Bool(m.Terminal.Mode == "warp")
-	}
-	for name, repository := range m.Repositories {
-		if repository.Remote == "" {
-			repository.Remote = "origin"
-		}
-		m.Repositories[name] = repository
-	}
-	applyLifecycleDefaults(m.Lifecycle.BeforeUp, m.Runtime.StartupTimeout.Duration)
-	applyLifecycleDefaults(m.Lifecycle.AfterDown, m.Runtime.ShutdownTimeout.Duration)
-	for i := range m.Services {
-		s := &m.Services[i]
-		if s.Repository == "" {
-			s.Repository = WorkspaceRepository
-		}
-		if s.Activation == "" {
-			if s.Source == "external" {
-				s.Activation = "workspace"
-			} else {
-				s.Activation = "tab"
-			}
-		}
-		if s.WorkingDirectory == "" {
-			s.WorkingDirectory = "."
-		}
-		if s.Compose != nil {
-			if len(s.Compose.UpArgv) == 0 {
-				s.Compose.UpArgv = []string{"docker", "compose"}
-			}
-			if len(s.Compose.DownArgv) == 0 {
-				s.Compose.DownArgv = []string{"docker", "compose"}
-			}
-		}
-		if s.Restart.Policy == "" {
-			if s.Activation == "workspace" && s.Source == "native" {
-				s.Restart.Policy = "on-failure"
-				s.Restart.MaxRestarts = 5
-			} else {
-				s.Restart.Policy = "no"
-			}
-		}
-		if s.Restart.Backoff.Duration == 0 {
-			s.Restart.Backoff.Duration = time.Second
-		}
-		if s.Terminal.Title == "" {
-			s.Terminal.Title = s.Name
-		}
-		if s.Terminal.IncludeInVersions == nil {
-			s.Terminal.IncludeInVersions = Bool(true)
-		}
-		if s.Activation == "tab" && len(s.Terminal.TriggerArgv) == 0 && s.Run != nil {
-			s.Terminal.TriggerArgv = append([]string(nil), s.Run.Argv...)
-		}
-		if s.Health != nil {
-			if s.Health.Interval.Duration == 0 {
-				s.Health.Interval.Duration = 2 * time.Second
-			}
-			if s.Health.Timeout.Duration == 0 {
-				s.Health.Timeout.Duration = 3 * time.Second
-			}
-			if s.Health.Retries == 0 {
-				s.Health.Retries = 30
-			}
-		}
-		for j := range s.Environment.Providers {
-			if s.Environment.Providers[j].Timeout.Duration == 0 {
-				s.Environment.Providers[j].Timeout.Duration = 10 * time.Second
-			}
-		}
-	}
-}
-
-func applyLifecycleDefaults(commands []LifecycleCommand, timeout time.Duration) {
-	for i := range commands {
-		if commands[i].WorkingDirectory == "" {
-			commands[i].WorkingDirectory = "."
-		}
-		if commands[i].Timeout.Duration == 0 {
-			commands[i].Timeout.Duration = timeout
-		}
-		applyProviderDefaults(&commands[i].Environment)
-	}
-}
-
-func applyProviderDefaults(environment *Environment) {
-	for i := range environment.Providers {
-		if environment.Providers[i].Timeout.Duration == 0 {
-			environment.Providers[i].Timeout.Duration = 10 * time.Second
-		}
-	}
-}

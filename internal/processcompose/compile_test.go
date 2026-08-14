@@ -2,6 +2,7 @@ package processcompose
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,20 +57,28 @@ func TestCompileMatchesGoldenAndProcessComposeSchema(t *testing.T) {
 	}
 }
 
-func TestClientUsesExactUnixSocketArguments(t *testing.T) {
-	directory := t.TempDir()
+func TestFiniteClientDoesNotExecuteProcessComposeBinary(t *testing.T) {
+	directory, err := os.MkdirTemp("/tmp", "rg-pc-binary-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(directory) })
 	logPath := filepath.Join(directory, "arguments.log")
 	executable := filepath.Join(directory, "process-compose")
 	script := `#!/bin/sh
 printf '%s\n' "$@" > "$FAKE_PROCESS_COMPOSE_LOG"
-printf '{"level":"debug","message":"diagnostic"}\n' >&2
-printf '[{"name":"api","status":"Running","pid":42}]\n'
 `
 	if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("FAKE_PROCESS_COMPOSE_LOG", logPath)
-	client := Client{Executable: executable, Socket: "runtime.sock", LogFile: filepath.Join(directory, "client.log"), WorkDir: directory}
+	client := serveUnixClient(t, http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/processes" {
+			t.Fatalf("unexpected request path %q", request.URL.Path)
+		}
+		_, _ = w.Write([]byte(`[{"name":"api","status":"Running","pid":42}]`))
+	}))
+	client.Executable = executable
 	states, raw, err := client.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -80,13 +89,8 @@ printf '[{"name":"api","status":"Running","pid":42}]\n'
 	if string(raw) != `[{"name":"api","status":"Running","pid":42}]` {
 		t.Fatalf("stderr contaminated raw JSON: %q", raw)
 	}
-	arguments, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "-U\n-u\nruntime.sock\n-L\n" + filepath.Join(directory, "client.log") + "\nlist\n--output\njson\n"
-	if string(arguments) != want {
-		t.Fatalf("unexpected arguments\n got: %q\nwant: %q", arguments, want)
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Fatalf("finite control call executed Process Compose binary: %v", err)
 	}
 }
 

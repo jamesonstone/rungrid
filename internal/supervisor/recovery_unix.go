@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jamesonstone/rungrid/internal/errs"
+	"github.com/jamesonstone/rungrid/internal/processcompose"
 	"github.com/jamesonstone/rungrid/internal/state"
 )
 
@@ -49,14 +50,16 @@ func RetireStaleRuntime(layout state.Layout, runtimeState Runtime) (bool, error)
 	if err := os.Remove(filepath.Join(layout.ProjectDir, "runtime.json")); err != nil {
 		return false, errs.Wrap(errs.ExitPartial, "RG639", "remove stale runtime record", err)
 	}
+	_ = processcompose.RemoveSocketAlias(runtimeState.Socket)
 	return true, nil
 }
 
 func completeRecordedIdentity(runtimeState Runtime) bool {
 	return runtimeState.GenerationID != "" && runtimeState.PID > 1 &&
+		runtimeState.EffectiveManifestSHA256 != "" && runtimeState.ConfigurationHash != "" &&
 		strings.TrimSpace(runtimeState.ProcessIdentity) != "" &&
 		strings.Contains(strings.ToLower(runtimeState.ProcessCommand), "process-compose") &&
-		runtimeState.SocketDevice != 0 && runtimeState.SocketInode != 0
+		runtimeState.SocketDevice != 0 && runtimeState.SocketInode != 0 && runtimeState.SocketOwnerUID == uint32(os.Getuid())
 }
 
 func socketAbsent(filename string) (bool, error) {

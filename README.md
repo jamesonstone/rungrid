@@ -197,6 +197,15 @@ project-scoped XDG state. Rungrid verifies ownership hashes, PID start identity,
 and Unix-socket identity before lifecycle mutation. `uninstall` removes only
 verified project-owned state and Warp Tab Configs.
 
+A generation-scoped resource guard protects managed native and Compose process
+trees from runaway CPU, memory, process, and thread growth. Its authority
+requires the exact project, effective-manifest generation, Process Compose
+runtime/socket identity, and process ancestry; names, paths, ports, manual
+processes, and external services never grant termination authority. `rungrid
+status` reports learned limits, incidents, restarts, and circuits, and
+`rungrid start <service> --reset-resource-circuit` is the explicit recovery
+action after a circuit opens.
+
 ## Development
 
 ```sh

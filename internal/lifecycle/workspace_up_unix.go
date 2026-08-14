@@ -77,7 +77,8 @@ func upWorkspace(ctx context.Context, loaded *manifest.Loaded, options UpOptions
 	}
 
 	runtimeState, reused, err := supervisor.Start(ctx, supervisor.StartOptions{
-		Layout: layout, GenerationID: generated.Plan.GenerationID, WorkspaceRoot: effective.WorkspaceRoot,
+		Layout: layout, GenerationID: generated.Plan.GenerationID, EffectiveManifestSHA256: generated.Plan.ManifestSHA256,
+		WorkspaceRoot:  effective.WorkspaceRoot,
 		ProcessCompose: pcExecutable, ProcessComposeVersion: pcVersion, RungridExecutable: rungridExecutable,
 		StartupTimeout: effective.Manifest.Runtime.StartupTimeout.Duration,
 	})
@@ -170,10 +171,10 @@ func finishUp(
 ) (UpResult, error) {
 	client := supervisor.Client(layout, runtimeState)
 	readyContext, cancel := context.WithTimeout(ctx, loaded.Manifest.Runtime.StartupTimeout.Duration)
-	_, readyErr := client.Run(readyContext, "project", "is-ready", "--wait")
+	readyErr := waitForWorkspaceReady(readyContext, client, &loaded.Manifest)
 	cancel()
 	if readyErr != nil {
-		return UpResult{}, errs.Wrap(errs.ExitNotReady, "RG1105", "workspace-owned services did not become ready", readyErr)
+		return UpResult{}, readyErr
 	}
 	rungridExecutable, err := processcompose.ExecutablePath()
 	if err != nil {

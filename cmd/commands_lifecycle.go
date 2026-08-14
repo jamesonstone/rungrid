@@ -32,14 +32,15 @@ func newSessionCommand(opt *options) *cobra.Command {
 }
 
 func newStartCommand(opt *options) *cobra.Command {
-	return &cobra.Command{
+	var resetResourceCircuit bool
+	command := &cobra.Command{
 		Use: "start <service>", Short: "Start a service using activation-aware behavior", Args: cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			active, err := opt.active(command.Context())
 			if err != nil {
 				return err
 			}
-			message, err := lifecycle.Start(command.Context(), active, args[0])
+			message, err := lifecycle.Start(command.Context(), active, args[0], resetResourceCircuit)
 			if err != nil {
 				return err
 			}
@@ -49,6 +50,8 @@ func newStartCommand(opt *options) *cobra.Command {
 			return nil
 		},
 	}
+	command.Flags().BoolVar(&resetResourceCircuit, "reset-resource-circuit", false, "close the verified service resource circuit before starting")
+	return command
 }
 
 func newStopCommand(opt *options) *cobra.Command {

@@ -115,6 +115,10 @@ func RunShell(ctx context.Context, options ShellOptions) error {
 	if err := command.Start(); err != nil {
 		return errs.Wrap(errs.ExitDependency, "RG1005", "start managed zsh", err)
 	}
+	watchContext, cancelWatch := context.WithCancel(ctx)
+	defer cancelWatch()
+	shutdown := make(chan string, 1)
+	go watchRuntime(watchContext, options, shutdown)
 	signals := make(chan os.Signal, 4)
 	signal.Notify(signals, os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 	defer signal.Stop(signals)
@@ -146,6 +150,8 @@ func RunShell(ctx context.Context, options ShellOptions) error {
 				}
 				return errs.New(errs.ExitInterrupted, "RG1008", "managed zsh did not exit after signal")
 			}
+		case reason := <-shutdown:
+			return stopManagedShell(command, result, reason)
 		}
 	}
 }

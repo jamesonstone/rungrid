@@ -30,6 +30,7 @@ func TestReconcileBeforeUpCompletesCleanupAfterRuntimeProcessDies(t *testing.T) 
 		Socket:          filepath.Join(layout.ProjectDir, "runtime.sock"),
 		SocketDevice:    1, SocketInode: 2,
 	}
+	completeRuntimeScope(t, layout, journal.GenerationID, &runtimeState)
 	if err := supervisor.Write(layout, runtimeState); err != nil {
 		t.Fatal(err)
 	}
@@ -84,6 +85,7 @@ func TestReconcileBeforeUpPreservesDeadRuntimeWithoutJournalIdentity(t *testing.
 		Socket:          filepath.Join(layout.ProjectDir, "runtime.sock"),
 		SocketDevice:    1, SocketInode: 2,
 	}
+	completeRuntimeScope(t, layout, journal.GenerationID, &runtimeState)
 	if err := supervisor.Write(layout, runtimeState); err != nil {
 		t.Fatal(err)
 	}

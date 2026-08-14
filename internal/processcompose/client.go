@@ -6,13 +6,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/jamesonstone/rungrid/internal/errs"
-	"github.com/jamesonstone/rungrid/internal/subprocess"
+)
+
+const (
+	queryTimeout      = 5 * time.Second
+	actionTimeout     = 10 * time.Second
+	shutdownTimeout   = 30 * time.Second
+	maxQueryResponse  = 4 << 20
+	maxActionResponse = 64 << 10
 )
 
 type Client struct {
@@ -34,40 +46,32 @@ func (c Client) command(ctx context.Context, arguments ...string) *exec.Cmd {
 	base := []string{"-U", "-u", c.Socket, "-L", c.LogFile}
 	command := exec.CommandContext(ctx, c.Executable, append(base, arguments...)...)
 	command.Dir = c.WorkDir
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	return command
 }
 
-func (c Client) Run(ctx context.Context, arguments ...string) ([]byte, error) {
-	command := c.command(ctx, arguments...)
-	result, err := subprocess.Run(command)
-	if err != nil {
-		return nil, errs.Wrap(errs.ExitFailure, "RG303", fmt.Sprintf("Process Compose %s failed", strings.Join(arguments, " ")), redactedCommandError(err, append(result.Stdout, result.Stderr...)))
-	}
-	return result.Stdout, nil
-}
-
 func (c Client) Ping(ctx context.Context) error {
-	_, err := c.Run(ctx, "project", "state")
+	_, err := c.request(ctx, queryTimeout, http.MethodGet, "/live", maxActionResponse, "liveness query")
 	return err
 }
 
 func (c Client) Start(ctx context.Context, service string) error {
-	_, err := c.Run(ctx, "process", "start", service)
+	_, err := c.request(ctx, actionTimeout, http.MethodPost, "/process/start/"+url.PathEscape(service), maxActionResponse, "start process")
 	return err
 }
 
 func (c Client) Stop(ctx context.Context, service string) error {
-	_, err := c.Run(ctx, "process", "stop", service)
+	_, err := c.request(ctx, actionTimeout, http.MethodPatch, "/process/stop/"+url.PathEscape(service), maxActionResponse, "stop process")
 	return err
 }
 
 func (c Client) Down(ctx context.Context) error {
-	_, err := c.Run(ctx, "down")
+	_, err := c.request(ctx, shutdownTimeout, http.MethodPost, "/project/stop", maxActionResponse, "stop project")
 	return err
 }
 
 func (c Client) List(ctx context.Context) ([]ProcessState, json.RawMessage, error) {
-	output, err := c.Run(ctx, "list", "--output", "json")
+	output, err := c.request(ctx, queryTimeout, http.MethodGet, "/processes", maxQueryResponse, "list processes")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -79,7 +83,7 @@ func (c Client) List(ctx context.Context) ([]ProcessState, json.RawMessage, erro
 }
 
 func (c Client) Get(ctx context.Context, service string) (ProcessState, error) {
-	output, err := c.Run(ctx, "process", "get", service, "--output", "json")
+	output, err := c.request(ctx, queryTimeout, http.MethodGet, "/process/"+url.PathEscape(service), maxQueryResponse, "get process")
 	if err != nil {
 		return ProcessState{}, err
 	}
@@ -91,6 +95,82 @@ func (c Client) Get(ctx context.Context, service string) (ProcessState, error) {
 		return ProcessState{}, errs.New(errs.ExitFailure, "RG304", "Process Compose returned no process state")
 	}
 	return states[0], nil
+}
+
+func (c Client) request(
+	ctx context.Context,
+	timeout time.Duration,
+	method, path string,
+	limit int64,
+	operation string,
+) ([]byte, error) {
+	requestContext, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	socket := c.Socket
+	if !filepath.IsAbs(socket) {
+		socket = filepath.Join(c.WorkDir, socket)
+	}
+	socket, err := socketDialPath(socket)
+	if err != nil {
+		return nil, errs.Wrap(errs.ExitConflict, "RG303", "prepare Process Compose Unix socket path", err)
+	}
+	transport := &http.Transport{
+		DisableKeepAlives: true,
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", socket)
+		},
+	}
+	defer transport.CloseIdleConnections()
+	request, err := http.NewRequestWithContext(requestContext, method, "http://process-compose"+path, nil)
+	if err != nil {
+		return nil, errs.Wrap(errs.ExitFailure, "RG303", "create Process Compose "+operation, err)
+	}
+	request.Header.Set("Accept", "application/json")
+	if method == http.MethodPost || method == http.MethodPatch {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	if token, tokenErr := apiToken(); tokenErr != nil {
+		return nil, errs.Wrap(errs.ExitDependency, "RG303", "read Process Compose API token", tokenErr)
+	} else if token != "" {
+		request.Header.Set("X-PC-Token-Key", token)
+	}
+	response, err := (&http.Client{
+		Transport:     transport,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+	}).Do(request)
+	if err != nil {
+		return nil, errs.Wrap(errs.ExitFailure, "RG303", "Process Compose "+operation+" failed", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	content, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	if err != nil {
+		return nil, errs.Wrap(errs.ExitFailure, "RG303", "read Process Compose "+operation+" response", err)
+	}
+	if int64(len(content)) > limit {
+		return nil, errs.New(errs.ExitFailure, "RG303", "Process Compose "+operation+" response exceeded its size limit")
+	}
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return nil, errs.New(errs.ExitFailure, "RG303", fmt.Sprintf("Process Compose %s returned HTTP %d (response redacted)", operation, response.StatusCode))
+	}
+	return content, nil
+}
+
+func apiToken() (string, error) {
+	if token := os.Getenv("PC_API_TOKEN"); token != "" {
+		return token, nil
+	}
+	path := os.Getenv("PC_API_TOKEN_PATH")
+	if path == "" {
+		return "", nil
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	if len(content) > 64<<10 {
+		return "", fmt.Errorf("process Compose API token file exceeds 64 KiB")
+	}
+	return strings.TrimSpace(string(content)), nil
 }
 
 func (c Client) LogsCommand(ctx context.Context, services []string, follow bool, tail int, raw bool, stdin io.Reader, stdout, stderr io.Writer) *exec.Cmd {
@@ -141,7 +221,7 @@ func decodeStates(content []byte) ([]ProcessState, error) {
 		result = append(result, ProcessState{
 			Name:     name,
 			Status:   status,
-			Health:   stringField(object, "health", "health_status"),
+			Health:   stringField(object, "health", "health_status", "is_ready"),
 			PID:      intField(object, "pid"),
 			ExitCode: intField(object, "exit_code", "exitCode"),
 		})
@@ -186,13 +266,6 @@ func intField(value map[string]any, keys ...string) int {
 		}
 	}
 	return 0
-}
-
-func redactedCommandError(err error, output []byte) error {
-	if len(bytes.TrimSpace(output)) == 0 {
-		return err
-	}
-	return fmt.Errorf("%w (subprocess output redacted)", err)
 }
 
 func InternalLog() string { return os.DevNull }

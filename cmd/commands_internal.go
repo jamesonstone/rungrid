@@ -8,6 +8,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/jamesonstone/rungrid/internal/lifecycle"
 	"github.com/jamesonstone/rungrid/internal/maintenance"
+	"github.com/jamesonstone/rungrid/internal/resourceguard"
 	"github.com/jamesonstone/rungrid/internal/serviceexec"
 	"github.com/jamesonstone/rungrid/internal/terminalshell"
 	"github.com/spf13/cobra"
@@ -15,8 +16,29 @@ import (
 
 func newInternalCommand(opt *options) *cobra.Command {
 	internal := &cobra.Command{Use: "internal", Hidden: true}
-	internal.AddCommand(newExecServiceCommand(opt, false), newExecServiceCommand(opt, true), newServiceShellCommand(opt), newTriggerCommand(opt), newMaintenanceWorkerCommand(opt))
+	internal.AddCommand(newExecServiceCommand(opt, false), newExecServiceCommand(opt, true), newServiceShellCommand(opt), newTriggerCommand(opt), newMaintenanceWorkerCommand(opt), newResourceGuardWorkerCommand(opt))
 	return internal
+}
+
+func newResourceGuardWorkerCommand(opt *options) *cobra.Command {
+	var projectID, generation string
+	command := &cobra.Command{
+		Use: "resource-guard-worker", Hidden: true, Args: cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			runtimeContext, err := serviceexec.LoadContext(projectID, generation, opt.stateDir, "")
+			if err != nil {
+				return err
+			}
+			ctx, cancel := signal.NotifyContext(command.Context(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
+			defer cancel()
+			return resourceguard.Run(ctx, resourceguard.WorkerOptions{RuntimeContext: runtimeContext, Stdout: command.OutOrStdout()})
+		},
+	}
+	command.Flags().StringVar(&projectID, "project-id", "", "project id")
+	command.Flags().StringVar(&generation, "generation", "", "generation id")
+	_ = command.MarkFlagRequired("project-id")
+	_ = command.MarkFlagRequired("generation")
+	return command
 }
 
 func newMaintenanceWorkerCommand(opt *options) *cobra.Command {

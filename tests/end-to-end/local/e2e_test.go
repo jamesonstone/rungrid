@@ -106,8 +106,8 @@ runtime:
 	if err := os.WriteFile(runtimePath, append(tamperedContent, '\n'), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if output, err := subprocess.Combined(exec.Command(binary, append(baseArguments, "status")...)); err == nil || !strings.Contains(string(output), "runtime PID") {
-		t.Fatalf("tampered runtime PID was not rejected: err=%v output=%s", err, output)
+	if output, err := subprocess.Combined(exec.Command(binary, append(baseArguments, "status")...)); err != nil || !strings.Contains(string(output), "runtime degraded") || !strings.Contains(string(output), "runtime PID") {
+		t.Fatalf("tampered runtime PID was not reported as degraded: err=%v output=%s", err, output)
 	}
 	if err := os.WriteFile(runtimePath, runtimeRecord, 0o600); err != nil {
 		t.Fatal(err)
@@ -145,15 +145,17 @@ runtime:
 	waitForE2EState(t, binary, baseArguments, "worker", "Completed")
 
 	restarted := exec.Command(binary, append(baseArguments, "session", "worker")...)
+	var restartedOutput bytes.Buffer
+	restarted.Stdout = &restartedOutput
+	restarted.Stderr = &restartedOutput
 	if err := restarted.Start(); err != nil {
 		t.Fatal(err)
 	}
 	waitForE2EState(t, binary, baseArguments, "worker", "Running")
-	if err := restarted.Process.Signal(os.Interrupt); err != nil {
-		t.Fatal(err)
-	}
-	_ = restarted.Wait()
 	run("down")
+	if err := restarted.Wait(); err != nil || !strings.Contains(restartedOutput.String(), "session released: workspace shutdown began") {
+		t.Fatalf("matching session did not quiesce during down: err=%v output=%s", err, restartedOutput.String())
+	}
 	assertE2ELines(t, filepath.Join(workspace, "lifecycle-events"), []string{"before", "after"})
 	run("down")
 	assertE2ELines(t, filepath.Join(workspace, "lifecycle-events"), []string{"before", "after"})

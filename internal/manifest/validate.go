@@ -68,6 +68,7 @@ func Validate(m *Manifest, root string) error {
 	if m.Runtime.ProcessCompose.LogRotation.MaxBackups <= 0 {
 		add("runtime.process_compose.log_rotation.max_backups", "must be positive")
 	}
+	validateResourceGuard(m.Runtime.ResourceGuard, "runtime.resource_guard", add)
 	if m.Terminal.Mode != "warp" && m.Terminal.Mode != "headless" {
 		add("terminal.mode", "must be warp or headless")
 	}
@@ -160,6 +161,12 @@ func Validate(m *Manifest, root string) error {
 		}
 		if service.Restart.Backoff.Duration < 0 {
 			add(prefix+".restart.backoff", "must not be negative")
+		}
+		if service.ResourceGuard != nil {
+			if service.ResourceGuard.SampleInterval.Duration != 0 {
+				add(prefix+".resource_guard.sample_interval", "is a workspace-wide runtime setting and may not be overridden per service")
+			}
+			validateResourceGuard(EffectiveResourceGuard(m.Runtime.ResourceGuard, *service.ResourceGuard), prefix+".resource_guard", add)
 		}
 		for portIndex, port := range service.Ports {
 			if port < 1 || port > 65535 {

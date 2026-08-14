@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/jamesonstone/rungrid/internal/errs"
+	"github.com/jamesonstone/rungrid/internal/guardstate"
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
@@ -36,15 +37,16 @@ type UpResult struct {
 }
 
 type ServiceStatus struct {
-	Name          string `json:"name"`
-	Source        string `json:"source"`
-	Activation    string `json:"activation"`
-	Status        string `json:"status"`
-	Health        string `json:"health,omitempty"`
-	PID           int    `json:"pid,omitempty"`
-	ExitCode      int    `json:"exit_code,omitempty"`
-	SessionOwned  bool   `json:"session_owned"`
-	TabRegistered bool   `json:"tab_registered"`
+	Name          string                    `json:"name"`
+	Source        string                    `json:"source"`
+	Activation    string                    `json:"activation"`
+	Status        string                    `json:"status"`
+	Health        string                    `json:"health,omitempty"`
+	PID           int                       `json:"pid,omitempty"`
+	ExitCode      int                       `json:"exit_code,omitempty"`
+	SessionOwned  bool                      `json:"session_owned"`
+	TabRegistered bool                      `json:"tab_registered"`
+	ResourceGuard *guardstate.ServiceStatus `json:"resource_guard,omitempty"`
 }
 
 func LoadActive(ctx context.Context, projectID, stateOverride string) (Active, error) {

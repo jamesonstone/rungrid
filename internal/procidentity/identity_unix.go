@@ -23,15 +23,27 @@ func Inspect(pid int) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	result, err := subprocess.Run(exec.CommandContext(ctx, "ps", "-o", "lstart=", "-p", strconv.Itoa(pid)))
+	command := exec.CommandContext(ctx, "ps", "-o", "lstart=", "-p", strconv.Itoa(pid))
+	command.Env = cLocaleEnvironment(os.Environ())
+	result, err := subprocess.Run(command)
 	if err != nil {
 		return "", err
 	}
-	identity := strings.TrimSpace(string(result.Stdout))
+	identity := strings.Join(strings.Fields(string(result.Stdout)), " ")
 	if identity == "" {
 		return "", fmt.Errorf("empty process start identity")
 	}
 	return identity, nil
+}
+
+func cLocaleEnvironment(environment []string) []string {
+	result := make([]string, 0, len(environment)+1)
+	for _, value := range environment {
+		if !strings.HasPrefix(value, "LC_ALL=") && !strings.HasPrefix(value, "LANG=") {
+			result = append(result, value)
+		}
+	}
+	return append(result, "LC_ALL=C")
 }
 
 func Matches(pid int, identity string) bool {

@@ -83,7 +83,7 @@ test-race:
 	go test -race ./...
 
 test-e2e:
-	RUNGRID_E2E=1 go test -run 'Test((Headless|TabOnly)Lifecycle|RepositoryMaintenance)EndToEnd' -count=1 ./tests/end-to-end/local
+	RUNGRID_E2E=1 RUNGRID_E2E_SUSTAINED=1 go test -run 'Test((Headless|TabOnly)Lifecycle|RepositoryMaintenance|ResourceGuard(Sustained)?)EndToEnd' -count=1 ./tests/end-to-end/local
 
 lint:
 	golangci-lint run ./...

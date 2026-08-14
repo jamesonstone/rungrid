@@ -8,8 +8,12 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
+	"strings"
+	"time"
 
 	"github.com/jamesonstone/rungrid/internal/errs"
+	"github.com/jamesonstone/rungrid/internal/guardstate"
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/processcompose"
 	"github.com/jamesonstone/rungrid/internal/session"
@@ -20,13 +24,15 @@ import (
 )
 
 type WorkspaceStatus struct {
-	ProjectID  string                    `json:"project_id"`
-	Runtime    string                    `json:"runtime"`
-	Generation string                    `json:"generation,omitempty"`
-	PID        int                       `json:"pid,omitempty"`
-	Socket     string                    `json:"socket,omitempty"`
-	Lifecycle  *WorkspaceLifecycleStatus `json:"lifecycle,omitempty"`
-	Services   []ServiceStatus           `json:"services"`
+	ProjectID           string                    `json:"project_id"`
+	Runtime             string                    `json:"runtime"`
+	Generation          string                    `json:"generation,omitempty"`
+	PID                 int                       `json:"pid,omitempty"`
+	Socket              string                    `json:"socket,omitempty"`
+	RuntimeVerification string                    `json:"runtime_verification,omitempty"`
+	Lifecycle           *WorkspaceLifecycleStatus `json:"lifecycle,omitempty"`
+	Services            []ServiceStatus           `json:"services"`
+	ResourceGuard       *guardstate.Status        `json:"resource_guard,omitempty"`
 }
 
 type WorkspaceLifecycleStatus struct {
@@ -56,7 +62,7 @@ func Logs(ctx context.Context, active Active, services []string, follow bool, ta
 		}
 	}
 	command := supervisor.Client(active.Layout, active.Runtime).LogsCommand(ctx, services, follow, tail, raw, stdin, stdout, stderr)
-	if err := command.Run(); err != nil {
+	if err := runRegisteredStream(active, command, "logs", strings.Join(services, ",")); err != nil {
 		return errs.Wrap(errs.ExitFailure, "RG1115", "read Process Compose logs", err)
 	}
 	return nil
@@ -64,10 +70,41 @@ func Logs(ctx context.Context, active Active, services []string, follow bool, ta
 
 func Attach(ctx context.Context, active Active, readOnly bool, stdin io.Reader, stdout, stderr io.Writer) error {
 	command := supervisor.Client(active.Layout, active.Runtime).AttachCommand(ctx, readOnly, stdin, stdout, stderr)
-	if err := command.Run(); err != nil {
+	if err := runRegisteredStream(active, command, "attach", ""); err != nil {
 		return errs.Wrap(errs.ExitFailure, "RG1116", "attach Process Compose TUI", err)
 	}
 	return nil
+}
+
+func runRegisteredStream(active Active, command *exec.Cmd, operation, service string) error {
+	restoreTerminal := func() error { return nil }
+	if operation == "attach" {
+		var err error
+		restoreTerminal, err = prepareTerminalForeground(command)
+		if err != nil {
+			return err
+		}
+	}
+	if err := command.Start(); err != nil {
+		return errors.Join(err, restoreTerminal())
+	}
+	registration, err := guardstate.RegisterControlClient(
+		active.Layout,
+		supervisor.AuthorityScope(active.Layout, active.Runtime),
+		command,
+		operation,
+		service,
+		time.Time{},
+	)
+	if err != nil {
+		if command.Process != nil {
+			_ = command.Process.Kill()
+		}
+		_ = command.Wait()
+		return errors.Join(err, restoreTerminal())
+	}
+	defer func() { _ = registration.Release() }()
+	return errors.Join(command.Wait(), restoreTerminal())
 }
 
 func Status(ctx context.Context, active Active) ([]ServiceStatus, json.RawMessage, error) {
@@ -98,6 +135,13 @@ func Status(ctx context.Context, active Active) ([]ServiceStatus, json.RawMessag
 
 func InspectStatus(ctx context.Context, layout state.Layout) (WorkspaceStatus, error) {
 	result := WorkspaceStatus{ProjectID: layout.ProjectID, Runtime: "inactive", Services: []ServiceStatus{}}
+	guardStatus, hasGuardStatus, err := guardstate.ReadStatus(layout)
+	if err != nil {
+		return result, err
+	}
+	if hasGuardStatus {
+		result.ResourceGuard = &guardStatus
+	}
 	journal, hasJournal, err := workspace.ReadJournalIfPresent(layout)
 	if err != nil {
 		return result, err
@@ -125,6 +169,10 @@ func InspectStatus(ctx context.Context, layout state.Layout) (WorkspaceStatus, e
 	}
 	runtimeState, err := supervisor.Read(layout)
 	if errors.Is(err, os.ErrNotExist) {
+		if result.ResourceGuard != nil {
+			result.ResourceGuard.AuthorityValid = false
+			result.ResourceGuard.Health = "inactive"
+		}
 		if hasJournal {
 			configuration, loadErr := journalManifest(layout, journal)
 			if loadErr != nil {
@@ -139,6 +187,7 @@ func InspectStatus(ctx context.Context, layout state.Layout) (WorkspaceStatus, e
 					Name: service.Name, Source: service.Source, Activation: service.Activation, Status: status,
 				})
 			}
+			mergeGuardServiceStatus(result.Services, result.ResourceGuard)
 		}
 		return result, nil
 	}
@@ -146,7 +195,17 @@ func InspectStatus(ctx context.Context, layout state.Layout) (WorkspaceStatus, e
 		return result, err
 	}
 	if err := supervisor.Verify(ctx, layout, runtimeState); err != nil {
-		return result, err
+		result.Runtime = "degraded"
+		result.Generation = runtimeState.GenerationID
+		result.PID = runtimeState.PID
+		result.Socket = runtimeState.Socket
+		result.RuntimeVerification = err.Error()
+		if result.ResourceGuard != nil {
+			result.ResourceGuard.AuthorityValid = false
+			result.ResourceGuard.Health = "degraded"
+			result.ResourceGuard.DegradedReason = err.Error()
+		}
+		return result, nil
 	}
 	configuration, _, err := runtimeManifest(layout, runtimeState)
 	if err != nil {
@@ -161,7 +220,21 @@ func InspectStatus(ctx context.Context, layout state.Layout) (WorkspaceStatus, e
 	result.PID = runtimeState.PID
 	result.Socket = runtimeState.Socket
 	result.Services = services
+	mergeGuardServiceStatus(result.Services, result.ResourceGuard)
 	return result, nil
+}
+
+func mergeGuardServiceStatus(services []ServiceStatus, status *guardstate.Status) {
+	if status == nil {
+		return
+	}
+	byName := make(map[string]*guardstate.ServiceStatus, len(status.Services))
+	for index := range status.Services {
+		byName[status.Services[index].Name] = &status.Services[index]
+	}
+	for index := range services {
+		services[index].ResourceGuard = byName[services[index].Name]
+	}
 }
 
 func SessionActive(layout state.Layout, generationID, service string) bool {
