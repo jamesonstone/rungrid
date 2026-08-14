@@ -131,9 +131,12 @@ before loading broader history.
 
 ## Last updated
 
+- 2026-08-14: Retained replacement soak run 2 as diagnostic evidence after one
+  rare snapshot exceeded its one-second deadline; bounded snapshots to two
+  configured intervals with the unchanged two-second ceiling.
 - 2026-08-13: Diagnosed Platform soak run 13's normal-load Darwin snapshot
-  cancellation, bounded the sampler to a full interval, and retained the failed
-  run as diagnostic evidence pending a fresh 24-hour run.
+  cancellation, bounded the sampler deadline, and retained the failed run as
+  diagnostic evidence pending a fresh 24-hour run.
 - 2026-08-12: Implemented the GH-33 runtime resource guard and began full,
   Platform, and time-bound soak validation.
 - 2026-08-10: Reproduced and fixed stale runtime PID recovery against the real

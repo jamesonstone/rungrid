@@ -279,13 +279,24 @@ invalidates the guard scope.
   default one-second interval's former half-interval deadline. The canceled
   `ps` process made the guard fail closed and recover on its next sample, but
   correctly invalidated the uninterrupted acceptance run. Snapshot execution
-  remains bounded to at most two seconds; its deadline now permits one full
-  configured interval, with a 500-millisecond minimum, while sampler p99
+  remains bounded to at most two seconds; its deadline now permits two full
+  configured intervals, with a 500-millisecond minimum, while sampler p99
   remains independently constrained to 250 milliseconds by soak acceptance.
 - Run 13 failed after 16 minutes with zero resource restarts or circuit
   openings when the snapshot deadline canceled `ps`. Its immutable evidence is
   retained at `tmp/2026-08-12/rungrid-resource-guard-soak/13/`; it is diagnostic
   evidence only and cannot be combined with the replacement acceptance run.
+- Replacement run 2 retained a roughly 180-millisecond steady-state sampler
+  and zero restart or circuit activity, but one rare scheduler stall exceeded
+  the one-second deadline after 2 hours 16 minutes. The guard again failed
+  closed and exact teardown succeeded. The final deadline therefore permits
+  two sample intervals while retaining the existing two-second hard ceiling;
+  ordinary performance remains governed by the independent p99 acceptance
+  threshold rather than by cancellation of a single outlier.
+- Final validation refreshed the vulnerability database and exposed four
+  reachable Go 1.25.12 standard-library advisories fixed in Go 1.25.13. The
+  repository toolchain pin moved to 1.25.13 so the exact soak candidate, hosted
+  builds, and release snapshot use the patched standard library.
 
 ## OUTCOME
 

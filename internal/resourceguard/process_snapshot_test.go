@@ -105,13 +105,13 @@ func TestParseCPUTime(t *testing.T) {
 	}
 }
 
-func TestSnapshotContextUsesBoundedFullInterval(t *testing.T) {
+func TestSnapshotContextUsesBoundedTwoIntervals(t *testing.T) {
 	for name, test := range map[string]struct {
 		interval time.Duration
 		expected time.Duration
 	}{
 		"minimum":  {interval: 100 * time.Millisecond, expected: 500 * time.Millisecond},
-		"interval": {interval: time.Second, expected: time.Second},
+		"interval": {interval: time.Second, expected: 2 * time.Second},
 		"maximum":  {interval: 10 * time.Second, expected: 2 * time.Second},
 	} {
 		t.Run(name, func(t *testing.T) {
