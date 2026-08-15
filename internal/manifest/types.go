@@ -71,6 +71,7 @@ type LifecycleCommand struct {
 	Timeout          Duration    `yaml:"timeout,omitempty" json:"timeout"`
 	Run              Command     `yaml:"run" json:"run"`
 	Environment      Environment `yaml:"environment,omitempty" json:"environment,omitempty"`
+	ResourceGuard     *ResourceGuard    `yaml:"resource_guard,omitempty" json:"resource_guard,omitempty"`
 }
 
 type Runtime struct {
@@ -78,7 +79,9 @@ type Runtime struct {
 	ShutdownTimeout Duration              `yaml:"shutdown_timeout,omitempty" json:"shutdown_timeout"`
 	LogRetention    Duration              `yaml:"log_retention,omitempty" json:"log_retention"`
 	ProcessCompose  ProcessComposeRuntime `yaml:"process_compose,omitempty" json:"process_compose"`
-	ResourceGuard   ResourceGuard         `yaml:"resource_guard,omitempty" json:"resource_guard"`
+	// ResourceGuard holds optional runtime-level guard configuration emitted by generators.
+	// Use a flexible mapping so unknown nested keys don't break decoding.
+	ResourceGuard   ResourceGuard       `yaml:"resource_guard,omitempty" json:"resource_guard,omitempty"`
 }
 
 type ProcessComposeRuntime struct {
@@ -108,13 +111,13 @@ type Service struct {
 	Compose          *Compose          `yaml:"compose,omitempty" json:"compose,omitempty"`
 	External         *External         `yaml:"external,omitempty" json:"external,omitempty"`
 	Environment      Environment       `yaml:"environment,omitempty" json:"environment,omitempty"`
+	ResourceGuard     *ResourceGuard    `yaml:"resource_guard,omitempty" json:"resource_guard,omitempty"`
 	DependsOn        map[string]string `yaml:"depends_on,omitempty" json:"depends_on,omitempty"`
 	Health           *Health           `yaml:"health,omitempty" json:"health,omitempty"`
 	Restart          Restart           `yaml:"restart,omitempty" json:"restart"`
 	Namespace        string            `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 	Terminal         ServiceTerminal   `yaml:"terminal,omitempty" json:"terminal"`
 	Ports            []int             `yaml:"ports,omitempty" json:"ports,omitempty"`
-	ResourceGuard    *ResourceGuard    `yaml:"resource_guard,omitempty" json:"resource_guard,omitempty"`
 }
 
 type Command struct {
@@ -176,3 +179,4 @@ type ServiceTerminal struct {
 }
 
 func Bool(value bool) *bool { return &value }
+
