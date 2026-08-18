@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -77,10 +76,10 @@ func newVersionsCommand(opt *options) *cobra.Command {
 				if opt.json {
 					return output.WriteJSON(command.OutOrStdout(), "Versions", active.Layout.ProjectID, snapshot, nil)
 				}
-				versions.WriteHuman(command.OutOrStdout(), snapshot)
+				versions.WriteHuman(command.OutOrStdout(), presentStyle(command.OutOrStdout(), opt.noColor), snapshot)
 				return nil
 			}
-			return watchVersions(command, active)
+			return watchVersions(command, active, opt)
 		},
 	}
 	command.Flags().BoolVar(&watch, "watch", false, "refresh continuously")
@@ -88,17 +87,26 @@ func newVersionsCommand(opt *options) *cobra.Command {
 	return command
 }
 
-func watchVersions(command *cobra.Command, active lifecycle.Active) error {
-	return watchVersionsWhileRuntimeActive(command, active, versionsRuntimeActive)
+func watchVersions(command *cobra.Command, active lifecycle.Active, opt *options) error {
+	return watchVersionsWhileRuntimeActive(command, active, opt, versionsRuntimeActive)
 }
 
-func watchVersionsWhileRuntimeActive(command *cobra.Command, active lifecycle.Active, runtimeActive func(state.Layout, supervisor.Runtime) bool) error {
+func watchVersionsWhileRuntimeActive(
+	command *cobra.Command,
+	active lifecycle.Active,
+	opt *options,
+	runtimeActive func(state.Layout, supervisor.Runtime) bool,
+) error {
 	ctx, cancel := signal.NotifyContext(command.Context(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	collector := versions.NewCollector()
-	display := newVersionsWatchDisplay(command.OutOrStdout(), isTerminalWriter(command.OutOrStdout()))
+	display := newVersionsWatchDisplay(
+		command.OutOrStdout(),
+		isTerminalWriter(command.OutOrStdout()),
+		presentStyle(command.OutOrStdout(), opt.noColor),
+	)
 	display.open()
 	defer display.close()
 	var previous versions.Snapshot
@@ -174,78 +182,13 @@ func newStatusCommand(opt *options) *cobra.Command {
 			if opt.json {
 				return output.WriteJSON(command.OutOrStdout(), "Status", layout.ProjectID, workspaceStatus, nil)
 			}
-			if !opt.quiet {
-				_, _ = fmt.Fprintf(command.OutOrStdout(), "runtime %s", workspaceStatus.Runtime)
-				if workspaceStatus.PID != 0 {
-					_, _ = fmt.Fprintf(command.OutOrStdout(), "  PID %d", workspaceStatus.PID)
-				}
-				if workspaceStatus.Generation != "" {
-					_, _ = fmt.Fprintf(command.OutOrStdout(), "  generation %s", workspaceStatus.Generation)
-				}
-				_, _ = fmt.Fprintln(command.OutOrStdout())
-				if workspaceStatus.RuntimeVerification != "" {
-					_, _ = fmt.Fprintf(command.OutOrStdout(), "runtime verification: %s\n", workspaceStatus.RuntimeVerification)
-				}
-				if workspaceStatus.Lifecycle != nil {
-					_, _ = fmt.Fprintf(
-						command.OutOrStdout(),
-						"lifecycle %s  teardown-required=%t  completed-before-up=%d\n",
-						workspaceStatus.Lifecycle.State,
-						workspaceStatus.Lifecycle.TeardownRequired,
-						len(workspaceStatus.Lifecycle.CompletedBefore),
-					)
-					if workspaceStatus.Lifecycle.CleanupFailure != "" {
-						_, _ = fmt.Fprintf(command.OutOrStdout(), "cleanup failure: %s\n", workspaceStatus.Lifecycle.CleanupFailure)
-					}
-					if workspaceStatus.Lifecycle.LastFailure != nil {
-						_, _ = fmt.Fprintf(
-							command.OutOrStdout(),
-							"last failed command: %s/%s (%s)\n",
-							workspaceStatus.Lifecycle.LastFailure.Phase,
-							workspaceStatus.Lifecycle.LastFailure.Name,
-							workspaceStatus.Lifecycle.LastFailure.Status,
-						)
-					}
-				}
-				if guard := workspaceStatus.ResourceGuard; guard != nil {
-					_, _ = fmt.Fprintf(command.OutOrStdout(), "resource guard %s  scope-valid=%t  heartbeat=%s", guard.Health, guard.AuthorityValid, guard.HeartbeatAt)
-					if guard.DegradedReason != "" {
-						_, _ = fmt.Fprintf(command.OutOrStdout(), "  degraded=%s", guard.DegradedReason)
-					}
-					_, _ = fmt.Fprintf(command.OutOrStdout(), "  guard-pid=%d cpu=%.1f%% rss=%d sampler=%.1fms\n", guard.GuardPID, guard.GuardCPUPercent, guard.GuardRSSBytes, guard.SamplerDurationMS)
-					_, _ = fmt.Fprintf(
-						command.OutOrStdout(),
-						"  scope project=%s generation=%s manifest=%s runtime-pid=%d socket=%s\n",
-						guard.Scope.ProjectID,
-						guard.Scope.GenerationID,
-						shortHash(guard.Scope.EffectiveManifestSHA256),
-						guard.Scope.RuntimePID,
-						guard.Scope.SocketPath,
-					)
-					if incident := guard.LatestControlIncident; incident != nil {
-						_, _ = fmt.Fprintf(command.OutOrStdout(), "  latest control incident=%s trigger=%s action=%s\n", incident.OccurredAt, incident.Trigger, incident.Action)
-					}
-				}
-				for _, item := range workspaceStatus.Services {
-					_, _ = fmt.Fprintf(command.OutOrStdout(), "%-20s %-10s %-9s %-14s pid=%d health=%s session=%t tab=%t\n", item.Name, item.Source, item.Activation, item.Status, item.PID, item.Health, item.SessionOwned, item.TabRegistered)
-					if guard := item.ResourceGuard; guard != nil {
-						_, _ = fmt.Fprintf(command.OutOrStdout(), "  guard=%s enforcement=%s scope-valid=%t cpu=%.1f%%/%.1f%% memory=%.1f%%/%.1f%% processes=%d/%d threads=%d/%d learning=%s mature=%t restarts=%d circuit=%s\n", guard.State, guard.Enforcement, guard.AuthorityValid, guard.Metrics.CPUPercent, guard.EffectiveLimits.CPUPercent, guard.Metrics.MemoryPercent, guard.EffectiveLimits.MemoryPercent, guard.Metrics.Processes, guard.EffectiveLimits.Processes, guard.Metrics.Threads, guard.EffectiveLimits.Threads, guard.Baseline.HealthyDuration, guard.Baseline.Mature, guard.RestartCount, guard.CircuitState)
-						if guard.LatestIncident != nil {
-							_, _ = fmt.Fprintf(command.OutOrStdout(), "  latest incident=%s tier=%s trigger=%s action=%s\n", guard.LatestIncident.OccurredAt, guard.LatestIncident.Tier, guard.LatestIncident.Trigger, guard.LatestIncident.Action)
-						}
-					}
-				}
+			if opt.quiet {
+				return nil
 			}
-			return nil
+			style := presentStyle(command.OutOrStdout(), opt.noColor)
+			return lifecycle.WriteStatusHuman(command.OutOrStdout(), style, workspaceStatus)
 		},
 	}
-}
-
-func shortHash(value string) string {
-	if len(value) <= 12 {
-		return value
-	}
-	return value[:12]
 }
 
 func newLogsCommand(opt *options) *cobra.Command {

@@ -3,9 +3,7 @@ package planner
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"sort"
-	"strings"
 
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/state"
@@ -160,58 +158,6 @@ func (p Plan) JSON() ([]byte, error) {
 		return nil, err
 	}
 	return append(content, '\n'), nil
-}
-
-func (p Plan) WriteHuman(w io.Writer) {
-	_, _ = fmt.Fprintf(
-		w,
-		"Project: %s\nGeneration: %s\nManifest directory: %s\nWorkspace root: %s\nTerminal: %s\n\n",
-		p.ProjectID,
-		p.GenerationID,
-		p.ManifestDirectory,
-		p.WorkspaceRoot,
-		p.TerminalMode,
-	)
-	p.Lifecycle.writeHuman(w)
-	_, _ = fmt.Fprintln(w, "Repositories:")
-	for _, repository := range p.Repositories {
-		defaultBranch := repository.DefaultBranch
-		if defaultBranch == "" {
-			defaultBranch = "<remote HEAD>"
-		}
-		_, _ = fmt.Fprintf(w, "  %-20s %-20s remote=%s default=%s\n", repository.Name, repository.Path, repository.Remote, defaultBranch)
-	}
-	_, _ = fmt.Fprintln(w)
-	if p.Recovery != nil {
-		if p.Recovery.Generation == "" {
-			_, _ = fmt.Fprintln(w, "Recovery: start; no recorded lifecycle generation")
-			_, _ = fmt.Fprintln(w)
-		} else {
-			_, _ = fmt.Fprintf(
-				w,
-				"Recovery: %s; recorded generation %s is %s (teardown-required=%t)\n\n",
-				p.Recovery.Action,
-				p.Recovery.Generation,
-				p.Recovery.State,
-				p.Recovery.TeardownRequired,
-			)
-		}
-	}
-	_, _ = fmt.Fprintln(w, "Services:")
-	for _, service := range p.Services {
-		stateText := "enabled"
-		if service.Disabled {
-			stateText = "disabled until session ownership"
-		} else if !service.Process {
-			stateText = "observed only"
-		}
-		_, _ = fmt.Fprintf(w, "  %-20s %-12s %-9s %-9s %s\n", service.Name, service.Repository, service.Source, service.Activation, stateText)
-	}
-	_, _ = fmt.Fprintln(w, "\nArtifacts:")
-	for _, artifact := range p.Artifacts {
-		_, _ = fmt.Fprintf(w, "  %s\n", artifact)
-	}
-	_, _ = fmt.Fprintf(w, "\nRequired executables: %s\n", strings.Join(p.Executables, ", "))
 }
 
 func repositoryPlans(m *manifest.Manifest) []RepositoryPlan {

@@ -13,6 +13,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/jamesonstone/rungrid/internal/maintenance"
 	"github.com/jamesonstone/rungrid/internal/manifest"
+	"github.com/jamesonstone/rungrid/internal/present"
 	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
 	"github.com/jamesonstone/rungrid/internal/workspace"
@@ -71,6 +72,9 @@ func RunMaintenanceWorker(ctx context.Context, projectID, generationID, operatio
 		return err
 	}
 	loaded := &manifest.Loaded{Manifest: *active.Manifest, WorkspaceRoot: active.Runtime.WorkspaceRoot}
+	// The worker writes into a Process Compose job log, never a terminal, so
+	// its human report is always colorless.
+	workerStyle := present.New(false)
 	options := maintenance.Options{Repositories: request.Repositories}
 	var data any
 	var runErr error
@@ -78,11 +82,11 @@ func RunMaintenanceWorker(ctx context.Context, projectID, generationID, operatio
 	case maintenance.OperationSync:
 		report, operationErr := maintenance.Sync(ctx, loaded, options, nil, NewMaintenanceCoordinator(active))
 		data, runErr = report, operationErr
-		_ = maintenance.WriteSyncHuman(stdout, report)
+		_ = maintenance.WriteSyncHuman(stdout, workerStyle, report)
 	case maintenance.OperationPrune:
 		report, operationErr := maintenance.Prune(ctx, loaded, options, nil)
 		data, runErr = report, operationErr
-		_ = maintenance.WritePruneHuman(stdout, report)
+		_ = maintenance.WritePruneHuman(stdout, workerStyle, report)
 	default:
 		runErr = errs.New(errs.ExitUsage, "RG1121", "unknown maintenance operation")
 	}

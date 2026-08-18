@@ -67,6 +67,14 @@
   output is interactive and color is not disabled. Color must never carry
   meaning; redirected and explicitly colorless help remains complete and
   stable.
+- Human command output treats emoji as content and color as decoration. Emoji
+  are emitted unconditionally so redirected output is the same document;
+  ANSI color is emitted only when the writer is interactive and color is not
+  disabled. Every glyph is accompanied by its plain status word, so neither
+  color nor a glyph ever carries meaning alone. Printing human output never
+  writes terminal query or control sequences beyond that decoration and the
+  alternate-screen watch surfaces each command specifies, and never alters
+  machine-readable output or exit status.
 - Linked feature worktrees are never implicitly checked out, merged, rebased,
   reset, stopped, or rewritten by repository maintenance. Filesystem
   reconciliation may commit, stash, or switch only the primary checkout under

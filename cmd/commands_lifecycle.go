@@ -2,13 +2,14 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/jamesonstone/rungrid/internal/lifecycle"
+	"github.com/jamesonstone/rungrid/internal/present"
 	"github.com/jamesonstone/rungrid/internal/session"
 	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/spf13/cobra"
@@ -44,9 +45,7 @@ func newStartCommand(opt *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if !opt.quiet {
-				_, _ = fmt.Fprintln(command.OutOrStdout(), message)
-			}
+			writeCommandResult(command, opt, present.GlyphOK, args[0]+": "+message)
 			return nil
 		},
 	}
@@ -62,7 +61,11 @@ func newStopCommand(opt *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return lifecycle.Stop(command.Context(), active, args[0])
+			if err := lifecycle.Stop(command.Context(), active, args[0]); err != nil {
+				return err
+			}
+			writeCommandResult(command, opt, present.GlyphOK, "stopped "+args[0])
+			return nil
 		},
 	}
 }
@@ -91,7 +94,22 @@ func newDownCommand(opt *options) *cobra.Command {
 				ctx, cancel = context.WithTimeout(ctx, timeout)
 			}
 			defer cancel()
-			return lifecycle.DownProject(ctx, layout)
+			verbose := !opt.json && !opt.quiet
+			style := presentStyle(command.OutOrStdout(), opt.noColor)
+			// Inspection is best-effort: it only supplies the announcement. A
+			// project in a conflicted state must still be able to shut down, so
+			// an inspection failure never blocks DownProject.
+			status, inspectErr := lifecycle.InspectStatus(ctx, layout)
+			if verbose {
+				announceDown(command.OutOrStdout(), style, layout.ProjectID, status, inspectErr == nil)
+			}
+			if err := lifecycle.DownProject(ctx, layout); err != nil {
+				return err
+			}
+			if verbose {
+				summarizeDown(command.OutOrStdout(), style, inspectErr != nil || status.Runtime == "active")
+			}
+			return nil
 		},
 	}
 	command.Flags().DurationVar(&timeout, "timeout", 0, "overall shutdown timeout")
@@ -115,7 +133,22 @@ func newUninstallCommand(opt *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return lifecycle.Uninstall(command.Context(), layout, keepLogs, keepConfig)
+			if err := lifecycle.Uninstall(command.Context(), layout, keepLogs, keepConfig); err != nil {
+				return err
+			}
+			preserved := []string{}
+			if keepLogs {
+				preserved = append(preserved, "logs")
+			}
+			if keepConfig {
+				preserved = append(preserved, "configuration")
+			}
+			detail := "removed project-owned state for " + layout.ProjectID
+			if len(preserved) > 0 {
+				detail += "; preserved " + strings.Join(preserved, " and ")
+			}
+			writeCommandResult(command, opt, present.EmojiUninstall, detail)
+			return nil
 		},
 	}
 	command.Flags().BoolVar(&keepLogs, "keep-logs", false, "preserve project logs")

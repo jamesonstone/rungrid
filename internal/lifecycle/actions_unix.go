@@ -164,6 +164,11 @@ func isAlreadyStopped(err error) bool {
 	return strings.Contains(message, "not running") || strings.Contains(message, "disabled") || strings.Contains(message, "already stopped")
 }
 
+// Stoppable reports whether shutdown will actually act on a service in this
+// state. Presentation reuses the runtime's own predicate so an announcement can
+// never claim work that stopRuntime will skip.
+func Stoppable(status string) bool { return shouldStop(status) }
+
 func shouldStop(status string) bool {
 	normalized := strings.ToLower(status)
 	return strings.Contains(normalized, "running") || strings.Contains(normalized, "launch") || strings.Contains(normalized, "pending") || strings.Contains(normalized, "waiting")

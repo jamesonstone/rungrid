@@ -28,6 +28,7 @@ before loading broader history.
 | `repository-reconcile` | `docs/specs/repository-reconcile/SPEC.md` | Locally validated implementation on `GH-23`. | Ready for stacked pull-request review against `feat/up-sync-flag`; hosted checks remain. |
 | `bounded-local-runtime` | `docs/specs/bounded-local-runtime/SPEC.md` | Locally validated implementation on `GH-26`. | Ready for pull-request review; hosted checks remain. |
 | `runtime-resource-guard` | `docs/specs/runtime-resource-guard/SPEC.md` | Locally validated implementation and Platform compatibility on `GH-33`, with PR #34 checks passing at `c444883`. | A corrected uninterrupted 24-hour Platform soak remains before merge. |
+| `human-command-output` | `docs/specs/human-command-output/SPEC.md` | Locally validated implementation on `feat/human-command-output`, rebased onto the merged resource guard. | Ready for pull-request review; no tracking issue is open yet and hosted checks remain. |
 
 ## FEATURE SUMMARIES
 
@@ -99,6 +100,24 @@ before loading broader history.
   uninterrupted run and final teardown pass.
 - **POINTER**: `docs/specs/runtime-resource-guard/SPEC.md`
 
+### Human command output
+
+- **STATUS**: review candidate
+- **INTENT**: Give the workspace-facing commands the presentation quality the
+  help surface already had, without touching the machine contract.
+- **IMPLEMENTED**: A shared `internal/present` vocabulary — the color gate,
+  status glyphs, and a display-width-measured box table that never probes the
+  terminal — applied to `plan`, `generate`, `doctor`, `status`, `versions`,
+  `up`, `down`, `start`, `stop`, `uninstall`, maintenance, and reconcile.
+  Emoji is content and always emitted; ANSI color is decoration gated on an
+  interactive, color-enabled writer. `up` and `down` announce intent and report
+  outcome without polling Process Compose. `status` renders the runtime
+  resource guard as its own block.
+- **OPEN ITEMS**: Open a tracking issue and rename the branch to match, then
+  run the hosted checks. `init`, `config validate`, `config path`, and
+  `version` remain deliberately unstyled.
+- **POINTER**: `docs/specs/human-command-output/SPEC.md`
+
 ## Current implementation
 
 - The Go CLI implements the complete documented command surface, strict
@@ -108,6 +127,9 @@ before loading broader history.
   supervision, exact native and Compose execution, exclusive sessions,
   Warp/headless presentation, Versions, repository maintenance, onboarding,
   and uninstall.
+- Human command output shares one presentation vocabulary in
+  `internal/present`; domain renderers keep their existing packages and receive
+  the resolved color decision from `cmd`.
 - Runtime control uses bounded Unix-socket HTTP for finite Process Compose
   operations. The generation-scoped resource guard enforces only exact
   identity- and ancestry-proven managed trees; external and manual processes

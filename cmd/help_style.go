@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/term"
+	"github.com/jamesonstone/rungrid/internal/present"
 )
 
 const (
@@ -32,6 +33,14 @@ type helpStyle struct {
 func helpStyleForWriter(w io.Writer, noColor bool) helpStyle {
 	noColorEnvironment := os.Getenv("NO_COLOR") != ""
 	return helpStyle{enabled: !noColor && !noColorEnvironment && terminalWriterCheck(w)}
+}
+
+// presentStyle resolves the command-output color decision using the same gate
+// as help output: an interactive writer with neither --no-color nor NO_COLOR.
+// Command output differs from help output in that its emoji are always emitted;
+// only color is gated here.
+func presentStyle(w io.Writer, noColor bool) present.Style {
+	return present.New(helpStyleForWriter(w, noColor).enabled)
 }
 
 func isTerminalWriter(w io.Writer) bool {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jamesonstone/rungrid/internal/manifest"
+	"github.com/jamesonstone/rungrid/internal/present"
 )
 
 func TestPlanIncludesPortableLifecycleActions(t *testing.T) {
@@ -58,7 +59,7 @@ services: []
 		t.Fatal(err)
 	}
 	var human bytes.Buffer
-	plan.WriteHuman(&human)
+	plan.WriteHuman(&human, present.New(false))
 	combined := string(content) + human.String()
 	if strings.Contains(combined, root) {
 		t.Fatal("plan persisted an absolute developer path")
@@ -80,7 +81,7 @@ func TestMultiWorkspacePlanGolden(t *testing.T) {
 	plan := Build(loaded, "dev")
 	plan.Recovery = &RecoveryPlan{Action: "start", ManifestCompatible: true, LifecycleCompatible: true}
 	var actual bytes.Buffer
-	plan.WriteHuman(&actual)
+	plan.WriteHuman(&actual, present.New(false))
 	expected, err := os.ReadFile(filepath.Join("testdata", "multi-workspace-plan.txt"))
 	if err != nil {
 		t.Fatal(err)

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jamesonstone/rungrid/internal/lifecycle"
+	"github.com/jamesonstone/rungrid/internal/present"
 	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
 	"github.com/jamesonstone/rungrid/internal/versions"
@@ -19,9 +20,9 @@ func TestVersionsWatchDisplayUsesAlternateScreen(t *testing.T) {
 	var output bytes.Buffer
 	snapshot := versions.Snapshot{CapturedAt: "2026-08-12T16:00:00Z", Generation: "generation-1"}
 	var human bytes.Buffer
-	versions.WriteHuman(&human, snapshot)
+	versions.WriteHuman(&human, present.New(false), snapshot)
 
-	display := newVersionsWatchDisplay(&output, true)
+	display := newVersionsWatchDisplay(&output, true, present.New(false))
 	display.open()
 	display.render(snapshot)
 	display.render(snapshot)
@@ -39,7 +40,7 @@ func TestVersionsWatchDisplayLeavesRedirectedOutputPlain(t *testing.T) {
 	t.Parallel()
 	var output bytes.Buffer
 	snapshot := versions.Snapshot{CapturedAt: "2026-08-12T16:00:00Z", Generation: "generation-1"}
-	display := newVersionsWatchDisplay(&output, false)
+	display := newVersionsWatchDisplay(&output, false, present.New(false))
 
 	display.open()
 	display.render(snapshot)
@@ -48,7 +49,7 @@ func TestVersionsWatchDisplayLeavesRedirectedOutputPlain(t *testing.T) {
 	if strings.Contains(output.String(), "\033[") {
 		t.Fatalf("redirected watch output contained ANSI controls: %q", output.String())
 	}
-	if !strings.HasPrefix(output.String(), "Rungrid Versions") {
+	if !strings.HasPrefix(output.String(), present.EmojiVersions+" Versions") {
 		t.Fatalf("redirected watch output omitted the table: %q", output.String())
 	}
 }
@@ -61,7 +62,7 @@ func TestVersionsWatchExitsWhenRuntimeBecomesInactive(t *testing.T) {
 	active := lifecycle.Active{}
 	checked := false
 
-	err := watchVersionsWhileRuntimeActive(command, active, func(state.Layout, supervisor.Runtime) bool {
+	err := watchVersionsWhileRuntimeActive(command, active, &options{}, func(state.Layout, supervisor.Runtime) bool {
 		checked = true
 		return false
 	})

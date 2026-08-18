@@ -1,8 +1,6 @@
 package planner
 
 import (
-	"fmt"
-	"io"
 	"strings"
 
 	"github.com/jamesonstone/rungrid/internal/manifest"
@@ -98,31 +96,6 @@ func addLifecycleExecutables(executables map[string]bool, configuration *manifes
 			}
 		}
 	}
-}
-
-func (p LifecyclePlan) writeHuman(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "Lifecycle:")
-	writePhase := func(name string, commands []LifecycleCommandPlan) {
-		if len(commands) == 0 {
-			_, _ = fmt.Fprintf(w, "  %s: none\n", name)
-			return
-		}
-		_, _ = fmt.Fprintf(w, "  %s:\n", name)
-		for _, command := range commands {
-			_, _ = fmt.Fprintf(
-				w,
-				"    %s (dir=%s timeout=%s) argv=%q\n",
-				command.Name,
-				command.WorkingDirectory,
-				command.Timeout,
-				command.Argv,
-			)
-		}
-	}
-	writePhase("before_up", p.BeforeUp)
-	writePhase("after_down", p.AfterDown)
-	_, _ = fmt.Fprintln(w, "  failure after prerequisites: stop runtime, then run all after_down commands")
-	_, _ = fmt.Fprintln(w)
 }
 
 func InspectRecovery(layout state.Layout, requested Plan) (*RecoveryPlan, error) {
