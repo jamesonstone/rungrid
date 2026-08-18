@@ -948,6 +948,28 @@ Help output is a human interface with a stable plain-text fallback:
 - color changes presentation only and never changes command names, ordering,
   aliases, flag parsing, completion, exit status, or machine-readable output.
 
+Human command output follows a related but distinct contract:
+
+- emoji is content and is always emitted, including when the destination is
+  redirected, piped, or run with `--no-color` or a non-empty `NO_COLOR`, so the
+  same command produces the same document wherever it is written;
+- ANSI color is decoration and is emitted only when the destination writer is an
+  interactive terminal and neither `--no-color` nor a non-empty `NO_COLOR` is
+  set;
+- every status glyph is accompanied by its plain status word in the same row, so
+  no meaning is carried by color or by a glyph alone;
+- tabular surfaces render box-drawn tables whose column widths are measured in
+  terminal display cells;
+- `up` and `down` announce the work they are about to perform and then report
+  the outcome; Process Compose remains the single authority for managed-service
+  lifecycle, and `status` remains the authoritative view of live service state;
+- printing human output never writes terminal query or control sequences beyond
+  the color decoration described above and the alternate-screen watch surfaces
+  specified per command; in particular, rendering a table never probes the
+  terminal;
+- `--quiet` suppresses all of it, and `--json` output is unaffected in shape,
+  field order, and content.
+
 ### 11.1 init
 
 ```text

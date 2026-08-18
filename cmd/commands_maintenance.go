@@ -153,7 +153,7 @@ func writeSyncReport(command *cobra.Command, opt *options, projectID string, rep
 	if opt.quiet {
 		return nil
 	}
-	return maintenance.WriteSyncHuman(command.OutOrStdout(), report)
+	return maintenance.WriteSyncHuman(command.OutOrStdout(), presentStyle(command.OutOrStdout(), opt.noColor), report)
 }
 
 func writePruneReport(command *cobra.Command, opt *options, projectID string, report maintenance.PruneReport) error {
@@ -163,7 +163,7 @@ func writePruneReport(command *cobra.Command, opt *options, projectID string, re
 	if opt.quiet {
 		return nil
 	}
-	return maintenance.WritePruneHuman(command.OutOrStdout(), report)
+	return maintenance.WritePruneHuman(command.OutOrStdout(), presentStyle(command.OutOrStdout(), opt.noColor), report)
 }
 
 func confirmPrune(command *cobra.Command, count int, yes, jsonOutput bool) error {

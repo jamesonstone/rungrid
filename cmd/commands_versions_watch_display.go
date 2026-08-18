@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/jamesonstone/rungrid/internal/present"
 	"github.com/jamesonstone/rungrid/internal/versions"
 )
 
@@ -15,12 +16,13 @@ const (
 
 type versionsWatchDisplay struct {
 	writer     io.Writer
+	style      present.Style
 	fullScreen bool
 	openScreen bool
 }
 
-func newVersionsWatchDisplay(writer io.Writer, fullScreen bool) *versionsWatchDisplay {
-	return &versionsWatchDisplay{writer: writer, fullScreen: fullScreen}
+func newVersionsWatchDisplay(writer io.Writer, fullScreen bool, style present.Style) *versionsWatchDisplay {
+	return &versionsWatchDisplay{writer: writer, style: style, fullScreen: fullScreen}
 }
 
 func (d *versionsWatchDisplay) open() {
@@ -35,7 +37,7 @@ func (d *versionsWatchDisplay) render(snapshot versions.Snapshot) {
 	if d.fullScreen {
 		_, _ = fmt.Fprint(d.writer, versionsWatchRedraw)
 	}
-	versions.WriteHuman(d.writer, snapshot)
+	versions.WriteHuman(d.writer, d.style, snapshot)
 }
 
 func (d *versionsWatchDisplay) close() {

@@ -2,11 +2,7 @@ package versions
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"reflect"
-	"strconv"
-	"strings"
 
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/processcompose"
@@ -41,32 +37,4 @@ func MateriallyEqual(left, right Snapshot) bool {
 	return left.Runtime == right.Runtime &&
 		left.Generation == right.Generation &&
 		reflect.DeepEqual(left.Services, right.Services)
-}
-
-func WriteHuman(w io.Writer, snapshot Snapshot) {
-	_, _ = fmt.Fprintf(w, "Rungrid Versions  %s  generation %s\n\n", snapshot.CapturedAt, snapshot.Generation)
-	_, _ = fmt.Fprintf(w, "%-18s %-14s %-18s %-9s %-7s %-12s %-18s %-10s\n", "SERVICE", "REPOSITORY", "STATE", "HEALTH", "PID", "PORTS", "BRANCH@COMMIT", "GIT")
-	for _, service := range snapshot.Services {
-		ports := "-"
-		if len(service.Ports) > 0 {
-			parts := make([]string, len(service.Ports))
-			for i, port := range service.Ports {
-				parts[i] = strconv.Itoa(port)
-			}
-			ports = strings.Join(parts, ",")
-		}
-		pid := "-"
-		if service.PID > 0 {
-			pid = strconv.Itoa(service.PID)
-		}
-		version := "-"
-		if service.Branch != "" || service.Commit != "" {
-			version = service.Branch + "@" + service.Commit
-		}
-		health := service.Health
-		if health == "" {
-			health = "-"
-		}
-		_, _ = fmt.Fprintf(w, "%-18s %-14s %-18s %-9s %-7s %-12s %-18s %-10s\n", service.Name, service.Repository, service.State, health, pid, ports, version, service.GitState)
-	}
 }

@@ -1,36 +1,47 @@
-Project: example-workspace-k7m4q2
-Generation: 2086f788b27a388562bc
-Manifest directory: .
-Workspace root: ..
-Terminal: headless
+🗺️ Plan
+   project       example-workspace-k7m4q2
+   generation    2086f788b27a388562bc
+   manifest      .
+   workspace     ..
+   terminal      headless
 
-Lifecycle:
-  before_up:
-    prepare-database (dir=control timeout=30s) argv=["example-infrastructure" "start" "database"]
-  after_down:
-    remove-infrastructure (dir=control timeout=30s) argv=["example-infrastructure" "stop"]
-  failure after prerequisites: stop runtime, then run all after_down commands
+🪝 Lifecycle
+   before_up     1 command(s)
+      ▸ prepare-database (dir=control timeout=30s) argv=["example-infrastructure" "start" "database"]
+   after_down    1 command(s)
+      ▸ remove-infrastructure (dir=control timeout=30s) argv=["example-infrastructure" "stop"]
+   ▸ failure after prerequisites: stop runtime, then run all after_down commands
 
-Repositories:
-  workspace            .                    remote=origin default=<remote HEAD>
-  api                  api                  remote=origin default=<remote HEAD>
-  web                  web                  remote=origin default=<remote HEAD>
+📚 Repositories (3)
+ ┌────────────┬──────┬────────┬────────────────┐
+ │ REPOSITORY │ PATH │ REMOTE │ DEFAULT BRANCH │
+ ├────────────┼──────┼────────┼────────────────┤
+ │ workspace  │ .    │ origin │ <remote HEAD>  │
+ │ api        │ api  │ origin │ <remote HEAD>  │
+ │ web        │ web  │ origin │ <remote HEAD>  │
+ └────────────┴──────┴────────┴────────────────┘
 
-Recovery: start; no recorded lifecycle generation
+🛟 Recovery
+   ▸ start; no recorded lifecycle generation
 
-Services:
-  database             workspace    external  workspace observed only
-  api                  api          native    tab       disabled until session ownership
-  web                  web          native    tab       disabled until session ownership
+🧩 Services (3)
+ ┌──────────┬────────────┬──────────┬────────────┬──────────────────────────────────┐
+ │ SERVICE  │ REPOSITORY │ SOURCE   │ ACTIVATION │ STATE                            │
+ ├──────────┼────────────┼──────────┼────────────┼──────────────────────────────────┤
+ │ database │ workspace  │ external │ workspace  │ observed only                    │
+ │ api      │ api        │ native   │ tab        │ disabled until session ownership │
+ │ web      │ web        │ native   │ tab        │ disabled until session ownership │
+ └──────────┴────────────┴──────────┴────────────┴──────────────────────────────────┘
 
-Artifacts:
-  manifest.yaml
-  plan.json
-  process-compose.yaml
-  wrappers/rungrid-resource-guard
-  wrappers/rungrid-maintenance-sync
-  wrappers/rungrid-maintenance-worktrees-prune
-  wrappers/api
-  wrappers/web
+🗂️ Artifacts (8)
+   ▸ manifest.yaml
+   ▸ plan.json
+   ▸ process-compose.yaml
+   ▸ wrappers/rungrid-resource-guard
+   ▸ wrappers/rungrid-maintenance-sync
+   ▸ wrappers/rungrid-maintenance-worktrees-prune
+   ▸ wrappers/api
+   ▸ wrappers/web
 
-Required executables: database-ready, example-api, example-infrastructure, example-web, make, npm, process-compose
+📦 Required executables
+   ▸ database-ready, example-api, example-infrastructure, example-web, make, npm, process-compose

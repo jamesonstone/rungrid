@@ -14,6 +14,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/maintenance"
 	"github.com/jamesonstone/rungrid/internal/output"
 	"github.com/jamesonstone/rungrid/internal/planner"
+	"github.com/jamesonstone/rungrid/internal/present"
 	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/spf13/cobra"
 )
@@ -35,12 +36,9 @@ func newDoctorCommand(opt *options) *cobra.Command {
 					return err
 				}
 			} else if !opt.quiet {
-				for _, check := range report.Checks {
-					_, _ = fmt.Fprintf(command.OutOrStdout(), "%-8s %-24s %s", check.Status, check.Name, check.Summary)
-					if check.Detail != "" {
-						_, _ = fmt.Fprintf(command.OutOrStdout(), " (%s)", check.Detail)
-					}
-					_, _ = fmt.Fprintln(command.OutOrStdout())
+				style := presentStyle(command.OutOrStdout(), opt.noColor)
+				if err := doctor.WriteHuman(command.OutOrStdout(), style, report); err != nil {
+					return err
 				}
 			}
 			if !report.OK {
@@ -80,7 +78,7 @@ func newPlanCommand(opt *options) *cobra.Command {
 				return errs.New(errs.ExitUsage, "RG1202", "plan output must be human or json")
 			}
 			if !opt.quiet {
-				plan.WriteHuman(command.OutOrStdout())
+				plan.WriteHuman(command.OutOrStdout(), presentStyle(command.OutOrStdout(), opt.noColor))
 			}
 			return nil
 		},
@@ -112,7 +110,12 @@ func newGenerateCommand(opt *options) *cobra.Command {
 				if result.Created {
 					verb = "created"
 				}
-				_, _ = fmt.Fprintf(command.OutOrStdout(), "%s generation %s at %s\n", verb, result.Plan.GenerationID, result.Directory)
+				style := presentStyle(command.OutOrStdout(), opt.noColor)
+				detail := fmt.Sprintf(
+					"%s generation %s  %s %s",
+					verb, result.Plan.GenerationID, style.Muted("at"), result.Directory,
+				)
+				_ = style.Result(command.OutOrStdout(), present.EmojiGenerate, detail)
 			}
 			return nil
 		},
@@ -175,6 +178,11 @@ func newUpCommand(opt *options) *cobra.Command {
 			open := loaded.Manifest.Terminal.Open != nil && *loaded.Manifest.Terminal.Open && !noOpen
 			ctx, cancel := signal.NotifyContext(command.Context(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 			defer cancel()
+			verbose := !opt.json && !opt.quiet
+			style := presentStyle(command.OutOrStdout(), opt.noColor)
+			if verbose {
+				announceUp(command.OutOrStdout(), style, &loaded.Manifest)
+			}
 			result, err := lifecycle.Up(ctx, loaded, lifecycle.UpOptions{
 				StateOverride: opt.stateDir, GeneratorVersion: Version, Headless: headless, Open: open, Requested: args,
 			})
@@ -184,8 +192,8 @@ func newUpCommand(opt *options) *cobra.Command {
 			if opt.json {
 				return output.WriteJSON(command.OutOrStdout(), "Up", loaded.Manifest.Project.ID, result, nil)
 			}
-			if !opt.quiet {
-				_, _ = fmt.Fprintf(command.OutOrStdout(), "workspace is running (PID %d, generation %s)\n", result.RuntimePID, result.Generation)
+			if verbose {
+				summarizeUp(command.OutOrStdout(), style, result)
 			}
 			return nil
 		},

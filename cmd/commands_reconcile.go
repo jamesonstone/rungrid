@@ -151,7 +151,7 @@ func writeReconcileReport(command *cobra.Command, opt *options, projectID string
 	if opt.quiet {
 		return nil
 	}
-	return reconcile.WriteHuman(command.OutOrStdout(), report)
+	return reconcile.WriteHuman(command.OutOrStdout(), presentStyle(command.OutOrStdout(), opt.noColor), report)
 }
 
 func resolveAgent(command *cobra.Command, value string) (agentexec.Provider, error) {
