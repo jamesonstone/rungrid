@@ -63,6 +63,10 @@ func ServiceGlyph(status, health string) string {
 		return GlyphRunning
 	case contains(normalized, "running", "healthy"):
 		return GlyphRunning
+	// A degraded or stale runtime is a problem the reader must notice; it must
+	// not fall through to the idle glyph.
+	case contains(normalized, "degraded", "stale"):
+		return GlyphWarning
 	case contains(normalized, "launch", "pending", "waiting", "restart", "starting"):
 		return GlyphPending
 	case contains(normalized, "completed", "exited"):

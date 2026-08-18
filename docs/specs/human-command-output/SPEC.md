@@ -40,6 +40,16 @@ golden-tested contract (`cmd/testdata/root-help.txt`) and `CLI_SPEC.md` §11 alr
 promises that redirected help carries no "terminal-only heading decoration". The two
 rules coexist; neither was relaxed.
 
+### A degraded runtime is a warning, not an absence
+
+`ServiceGlyph` maps one vocabulary for both Process Compose service statuses and the
+workspace runtime state. `degraded` and `stale` are runtime states with no service
+equivalent, so they originally fell through to the idle glyph — rendering a runtime
+whose PID no longer belongs to Process Compose identically to one that was simply not
+running. They now map to the warning glyph. The plain word carried the meaning either
+way, but the glyph contradicted it, which is the one thing a decorative glyph must
+never do.
+
 ### Meaning never depends on a glyph
 
 Every glyph is paired with its plain status word in the same row: 🟢 sits next to
@@ -143,6 +153,12 @@ which the existing watch tests continue to assert.
   `make sanitize`
 - `cmd/testdata/root-help.txt` must still match byte-for-byte, proving help output was
   not disturbed.
+- `tests/end-to-end/local/run.sh` must pass. The real-Process-Compose suite is gated
+  behind `RUNGRID_E2E=1`, so `go test ./...` does not cover it; a restyle that changes
+  what a command prints must run it explicitly. `TestHeadlessLifecycleEndToEnd`
+  asserts on `status` output and was the one caller this restyle broke — it matched the
+  literal `runtime degraded`, which became a glyph paired with the plain word. Its
+  assertion now pins the pairing itself rather than the old sentence.
 - `internal/planner/testdata/multi-workspace-plan.txt` regenerated; the redacted-argv
   assertion in `plan_test.go` must survive the restyle.
 - Gating proof: `cmd.TestPresentStyleGatesColorButNeverEmoji` drives all four paths

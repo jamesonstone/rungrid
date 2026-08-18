@@ -60,6 +60,8 @@ func TestGlyphsCoverKnownStates(t *testing.T) {
 		{status: "external", want: GlyphExtern},
 		{status: "active", want: GlyphRunning},
 		{status: "inactive", want: GlyphIdle},
+		{status: "degraded", want: GlyphWarning},
+		{status: "stale", want: GlyphWarning},
 	} {
 		if actual := ServiceGlyph(test.status, test.health); actual != test.want {
 			t.Errorf("ServiceGlyph(%q, %q) = %s, want %s", test.status, test.health, actual, test.want)

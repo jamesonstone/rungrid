@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesonstone/rungrid/internal/present"
 	"github.com/jamesonstone/rungrid/internal/subprocess"
 )
 
@@ -106,7 +107,10 @@ runtime:
 	if err := os.WriteFile(runtimePath, append(tamperedContent, '\n'), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if output, err := subprocess.Combined(exec.Command(binary, append(baseArguments, "status")...)); err != nil || !strings.Contains(string(output), "runtime degraded") || !strings.Contains(string(output), "runtime PID") {
+	// status reports the degraded runtime with its glyph paired to the plain
+	// word, and explains that the runtime PID is what went stale.
+	degraded := present.GlyphWarning + " degraded"
+	if output, err := subprocess.Combined(exec.Command(binary, append(baseArguments, "status")...)); err != nil || !strings.Contains(string(output), degraded) || !strings.Contains(string(output), "runtime PID") {
 		t.Fatalf("tampered runtime PID was not reported as degraded: err=%v output=%s", err, output)
 	}
 	if err := os.WriteFile(runtimePath, runtimeRecord, 0o600); err != nil {
