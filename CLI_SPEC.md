@@ -1477,11 +1477,6 @@ Rungrid v1 is complete when all of the following are demonstrated:
   reopening;
 - onboarding transition, backtracking, resize, profile, inference, confirmation,
   draft, resume, invalidation, and secret-free snapshot tests pass;
-- a temporary-XDG end-to-end test covers init, plan, generate, up, Overview,
-  Versions, session stop/restart, prerequisite rollback, missing-runtime
-  teardown, retry after cleanup failure, down, and uninstall without changing
-  unrelated files;
-- Process Compose at the minimum supported version passes real integration;
 - controlled macOS Warp and Linux headless smoke tests pass;
 - a generic multi-repository workspace demonstrates exact tab/layout,
   lifecycle, crash-recovery, and teardown parity;

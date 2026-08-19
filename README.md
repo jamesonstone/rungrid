@@ -213,7 +213,6 @@ make build
 make run ARGS="version"
 make install
 make check
-make test-e2e
 make release-snapshot
 ```
 
@@ -226,9 +225,7 @@ symlink targets the just-built repository binary. `make run ARGS="..."`
 executes the repository binary, and `make install` installs it with the active
 Go toolchain. `make check` checks formatting, vets, runs unit/race and
 dependency-license tests, verifies the specification sanitization contract,
-and builds macOS/Linux targets without changing the global link. The opt-in
-end-to-end suite launches a real Process Compose v1 runtime in temporary XDG
-state.
+and builds macOS/Linux targets without changing the global link.
 
 ## Maintainers
 

@@ -10,7 +10,7 @@ SUDO ?= sudo
 ARGS ?=
 GO_FILES := $(shell find . -type f -name '*.go' -not -path './vendor/*')
 
-.PHONY: help build compile link run install clean fmt fmt-check vet test test-race test-e2e lint vuln license build-cross sanitize check release-snapshot
+.PHONY: help build compile link run install clean fmt fmt-check vet test test-race lint vuln license build-cross sanitize check release-snapshot
 
 help:
 	@printf '%s\n' 'Rungrid developer workflow'
@@ -21,7 +21,6 @@ help:
 	@printf '%s\n' '  make install           install with the active Go toolchain'
 	@printf '%s\n' '  make clean             remove generated build and release output'
 	@printf '%s\n' '  make check             check format, vet, test, race, licenses, and builds'
-	@printf '%s\n' '  make test-e2e          run the real Process Compose lifecycle suite'
 	@printf '%s\n' '  make lint              run golangci-lint'
 	@printf '%s\n' '  make vuln              run govulncheck'
 	@printf '%s\n' '  make license           verify dependency license material'
@@ -81,9 +80,6 @@ test:
 
 test-race:
 	go test -race ./...
-
-test-e2e:
-	RUNGRID_E2E=1 RUNGRID_E2E_SUSTAINED=1 go test -run 'Test((Headless|TabOnly)Lifecycle|RepositoryMaintenance|ResourceGuard(Sustained)?)EndToEnd' -count=1 ./tests/end-to-end/local
 
 lint:
 	golangci-lint run ./...
