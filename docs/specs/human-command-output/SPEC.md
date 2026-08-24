@@ -153,12 +153,6 @@ which the existing watch tests continue to assert.
   `make sanitize`
 - `cmd/testdata/root-help.txt` must still match byte-for-byte, proving help output was
   not disturbed.
-- `tests/end-to-end/local/run.sh` must pass. The real-Process-Compose suite is gated
-  behind `RUNGRID_E2E=1`, so `go test ./...` does not cover it; a restyle that changes
-  what a command prints must run it explicitly. `TestHeadlessLifecycleEndToEnd`
-  asserts on `status` output and was the one caller this restyle broke — it matched the
-  literal `runtime degraded`, which became a glyph paired with the plain word. Its
-  assertion now pins the pairing itself rather than the old sentence.
 - `internal/planner/testdata/multi-workspace-plan.txt` regenerated; the redacted-argv
   assertion in `plan_test.go` must survive the restyle.
 - Gating proof: `cmd.TestPresentStyleGatesColorButNeverEmoji` drives all four paths
