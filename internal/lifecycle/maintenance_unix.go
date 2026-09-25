@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jamesonstone/rungrid/internal/checkout"
 	"github.com/jamesonstone/rungrid/internal/maintenance"
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/session"
@@ -145,11 +146,11 @@ func (c *MaintenanceCoordinator) runningServices(ctx context.Context, worktreePa
 		if service.Source == "external" {
 			continue
 		}
-		repositoryRoot, err := manifest.ServiceRepositoryRoot(c.active.Manifest, c.active.Runtime.WorkspaceRoot, service)
+		repositoryRoot, err := checkout.Resolve(ctx, c.active.Layout, &manifest.Loaded{Manifest: *c.active.Manifest, WorkspaceRoot: c.active.Runtime.WorkspaceRoot}, service, nil)
 		if err != nil {
 			return nil, err
 		}
-		if !withinMaintenanceWorktree(worktreePath, repositoryRoot) {
+		if !withinMaintenanceWorktree(worktreePath, repositoryRoot.RepositoryRoot) && !withinMaintenanceWorktree(worktreePath, repositoryRoot.WorkingDirectory) {
 			continue
 		}
 		current, err := client.Get(ctx, service.Name)

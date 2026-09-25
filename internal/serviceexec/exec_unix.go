@@ -69,11 +69,7 @@ func Exec(ctx context.Context, runtimeContext Context, serviceName string) error
 	if service.Source == "external" {
 		return errs.New(errs.ExitUsage, "RG705", "external services do not have supervised processes")
 	}
-	repositoryRoot, err := manifest.ServiceRepositoryRoot(runtimeContext.Manifest, runtimeContext.WorkspaceRoot, service)
-	if err != nil {
-		return err
-	}
-	workingDirectory, err := manifest.ServiceWorkingDirectory(runtimeContext.Manifest, runtimeContext.WorkspaceRoot, service)
+	repositoryRoot, workingDirectory, err := serviceRoots(ctx, runtimeContext.Layout, runtimeContext.Manifest, runtimeContext.WorkspaceRoot, service)
 	if err != nil {
 		return err
 	}
@@ -106,11 +102,7 @@ func CheckHealth(ctx context.Context, runtimeContext Context, serviceName string
 	if service.Health == nil {
 		return nil
 	}
-	repositoryRoot, err := manifest.ServiceRepositoryRoot(runtimeContext.Manifest, runtimeContext.WorkspaceRoot, service)
-	if err != nil {
-		return err
-	}
-	workingDirectory, err := manifest.ServiceWorkingDirectory(runtimeContext.Manifest, runtimeContext.WorkspaceRoot, service)
+	repositoryRoot, workingDirectory, err := serviceRoots(ctx, runtimeContext.Layout, runtimeContext.Manifest, runtimeContext.WorkspaceRoot, service)
 	if err != nil {
 		return err
 	}
@@ -165,15 +157,11 @@ func WaitExternal(ctx context.Context, m *manifest.Manifest, root string, servic
 	}
 }
 
-func ComposeShutdown(m *manifest.Manifest, service *manifest.Service, root string, ctx context.Context) error {
+func ComposeShutdown(ctx context.Context, layout state.Layout, m *manifest.Manifest, service *manifest.Service, root string) error {
 	if service.Compose == nil {
 		return nil
 	}
-	repositoryRoot, err := manifest.ServiceRepositoryRoot(m, root, service)
-	if err != nil {
-		return err
-	}
-	workingDirectory, err := manifest.ServiceWorkingDirectory(m, root, service)
+	repositoryRoot, workingDirectory, err := serviceRoots(ctx, layout, m, root, service)
 	if err != nil {
 		return err
 	}

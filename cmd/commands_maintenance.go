@@ -82,8 +82,8 @@ func newSyncCommand(opt *options) *cobra.Command {
 }
 
 func newWorktreesCommand(opt *options) *cobra.Command {
-	command := &cobra.Command{Use: "worktrees", Short: "Inspect and safely maintain linked Git worktrees"}
-	command.AddCommand(newWorktreesPruneCommand(opt))
+	command := &cobra.Command{Use: "worktrees", Short: "Inspect, select, update, and prune linked Git worktrees"}
+	command.AddCommand(newWorktreesListCommand(opt), newWorktreesUseCommand(opt), newWorktreesUpdateCommand(opt), newWorktreesPruneCommand(opt))
 	return command
 }
 

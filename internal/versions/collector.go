@@ -10,6 +10,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/processcompose"
 	"github.com/jamesonstone/rungrid/internal/serviceexec"
+	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
 )
 
@@ -20,6 +21,7 @@ const (
 )
 
 type Collector struct {
+	layout            state.Layout
 	now               func() time.Time
 	captureSource     func(context.Context, string, string) sourceVersion
 	captureListeners  func(context.Context, []int) map[int][]int
@@ -51,6 +53,11 @@ func NewCollector() *Collector {
 		listeners:        map[int][]int{},
 		externals:        map[string]cachedExternal{},
 	}
+}
+
+func (c *Collector) SetLayout(layout state.Layout) *Collector {
+	c.layout = layout
+	return c
 }
 
 func (c *Collector) Capture(ctx context.Context, m *manifest.Manifest, runtimeState supervisor.Runtime, client processcompose.Client) Snapshot {
@@ -98,7 +105,7 @@ func (c *Collector) captureService(ctx context.Context, now time.Time, m *manife
 			item.Ports = append([]int(nil), ports...)
 		}
 	}
-	if directory, err := manifest.ServiceWorkingDirectory(m, runtimeState.WorkspaceRoot, service); err == nil {
+	if directory, err := serviceWorkingDirectory(c.layout, m, runtimeState.WorkspaceRoot, service); err == nil {
 		source := c.source(ctx, now, directory)
 		item.Branch, item.Commit, item.GitState, item.Worktree = source.branch, source.commit, source.gitState, source.worktree
 	}

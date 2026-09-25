@@ -72,7 +72,7 @@ func newVersionsCommand(opt *options) *cobra.Command {
 				watch = isTerminalWriter(command.OutOrStdout())
 			}
 			if opt.json || once || !watch {
-				snapshot := versions.Capture(command.Context(), active.Manifest, active.Runtime, client)
+				snapshot := versions.NewCollector().SetLayout(active.Layout).Capture(command.Context(), active.Manifest, active.Runtime, client)
 				if opt.json {
 					return output.WriteJSON(command.OutOrStdout(), "Versions", active.Layout.ProjectID, snapshot, nil)
 				}
@@ -101,7 +101,7 @@ func watchVersionsWhileRuntimeActive(
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-	collector := versions.NewCollector()
+	collector := versions.NewCollector().SetLayout(active.Layout)
 	display := newVersionsWatchDisplay(
 		command.OutOrStdout(),
 		isTerminalWriter(command.OutOrStdout()),

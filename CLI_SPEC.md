@@ -213,6 +213,13 @@ normalized manifests retain their logical names and relative paths. Absolute
 resolved repository paths are machine-local runtime values and never project
 identity material.
 
+A service may additionally select one registered Git worktree of its declared
+repository through `rungrid worktrees use`. That binding is stored in project
+state as `checkouts.json` and may name a linked worktree outside
+`workspace.root`. Portable overlays cannot represent those paths. Native start,
+health, Compose, managed shells, and Versions resolve `working_directory` and
+environment providers inside the selected checkout.
+
 ### 5.5 Lifecycle
 
 ```yaml
@@ -583,6 +590,7 @@ generations/<generation-id>/
   logs/
 runtime.json
 lifecycle.json
+checkouts.json
 lifecycle-logs/<generation-id>/
 resource-guard/
   baselines/
@@ -1187,28 +1195,53 @@ primitive, and summarize the native result. Bare `--agent` selects Copilot;
 `select` uses `fzf` when installed and otherwise requires a numbered terminal
 selection. Provider output and exit status pass through unchanged.
 
-### 11.13 worktrees prune
+### 11.13 worktrees
 
 ```text
+rungrid worktrees list [--json]
+rungrid worktrees use <service> [selector] [--clear]
+rungrid worktrees update [--service <name>]... [--sync] [--dry-run] [--json]
 rungrid worktrees prune [--repository <name>]... [--dry-run] [--yes] [--json]
 ```
 
-Inspects exact registered linked worktrees once per Git common directory. A
-candidate must be canonical, clean, inactive, non-primary, non-current,
-non-detached, unlocked, absent from the manifest, backed by exactly one
-same-repository pull request merged into the discovered default branch, equal
-to that pull request's head OID, absent from the live remote, and unused as the
-working directory of any live process. Process inspection is fail-closed.
+`list` reports every declared service repository's registered worktrees,
+including the primary checkout, with branch, HEAD, and which services currently
+select each path.
 
-The command previews every decision and requires interactive confirmation.
-Non-interactive execution requires `--yes`. It revalidates each candidate,
-removes only verified expected environment symlinks, runs ordinary non-force
-`git worktree remove` and `git branch -d`, restores links if removal fails, and
-prunes stale metadata. One candidate or repository failure does not block an
-independently proven candidate; any failure still makes the complete command a
-typed partial result. It never uses direct recursive deletion or deletes a
-remote branch. `--dry-run` performs no local Git, state, process, symlink,
-metadata, or filesystem mutation.
+`use` binds exactly one service to an existing registered worktree of that
+service's Git repository. The selector is `primary`, an existing worktree path,
+a unique branch name, or a unique worktree directory base name such as
+`GH-12`. `--clear` removes the binding so the service uses the declared
+repository root again. With no selector, an interactive numbered picker lists
+only that repository's worktrees. `--json` or a non-interactive stdin without a
+selector fails closed. Detached HEAD, missing paths, foreign repositories, and
+unregistered directories are refused. The binding is project-local state and
+does not change the portable manifest.
+
+`update` fast-forwards each targeted service's selected feature-branch worktree
+with fetch plus `merge --ff-only` after expected-OID checks. It skips the
+primary/default checkout. Dirty, ahead, diverged, detached, or untracked
+worktrees are preserved with an exact reason. `--sync` also runs the existing
+default-branch `sync` contract. `--dry-run` may query remotes but does not
+fetch, write refs, write state, or pause processes.
+
+`prune` inspects exact registered linked worktrees once per Git common
+directory. A candidate must be canonical, clean, inactive, non-primary,
+non-current, non-detached, unlocked, absent from the manifest, backed by
+exactly one same-repository pull request merged into the discovered default
+branch, equal to that pull request's head OID, absent from the live remote, and
+unused as the working directory of any live process. Process inspection is
+fail-closed.
+
+The prune command previews every decision and requires interactive
+confirmation. Non-interactive execution requires `--yes`. It revalidates each
+candidate, removes only verified expected environment symlinks, runs ordinary
+non-force `git worktree remove` and `git branch -d`, restores links if removal
+fails, and prunes stale metadata. One candidate or repository failure does not
+block an independently proven candidate; any failure still makes the complete
+command a typed partial result. It never uses direct recursive deletion or
+deletes a remote branch. `--dry-run` performs no local Git, state, process,
+symlink, metadata, or filesystem mutation.
 
 ### 11.14 session
 

@@ -24,9 +24,11 @@
 - The manifest directory and workspace root are distinct. The portable root is
   relative to the manifest, while resolved paths are machine-local and must
   remain inside the symlink-aware workspace boundary.
-- Services may select a declared logical repository within the workspace.
-  Service working directories, Compose files, and environment-provider paths
-  must remain inside that repository's symlink-aware boundary.
+- Services may select a declared logical repository and may bind one
+  registered worktree of that repository. Portable overlays remain
+  workspace-relative and cannot name those checkouts. Service working
+  directories, Compose files, and environment-provider paths must remain
+  inside the selected checkout's symlink-aware boundary.
 - Subprocesses use argument vectors. User commands, environment values, and
   paths must not be interpolated into shell command strings.
 - Secrets resolve only at execution time and must be redacted from errors,
@@ -79,9 +81,11 @@
   reset, stopped, or rewritten by repository maintenance. Filesystem
   reconciliation may commit, stash, or switch only the primary checkout under
   its explicit stale-root gates; ordinary manifest maintenance retains the
-  no-feature-checkout and no-stash rule. A checked-out default worktree advances
+  no-feature-checkout and no-stash rule.   A checked-out default worktree advances
   only after clean-state and expected-OID revalidation, with exact affected
-  services paused and resumed.
+  services paused and resumed. An explicit `worktrees update` may
+  fast-forward only a selected feature worktree with fetch plus
+  `merge --ff-only` after expected-OID checks.
 - Process Compose may present disabled repository-maintenance jobs and their
   logs, but only a short-lived generation-scoped CLI request authorizes one.
   The read-only Overview never grants mutation authority.
