@@ -4,8 +4,10 @@ import (
 	"context"
 	"reflect"
 
+	"github.com/jamesonstone/rungrid/internal/checkout"
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/processcompose"
+	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
 )
 
@@ -31,6 +33,14 @@ type ServiceVersion struct {
 
 func Capture(ctx context.Context, m *manifest.Manifest, runtimeState supervisor.Runtime, client processcompose.Client) Snapshot {
 	return NewCollector().Capture(ctx, m, runtimeState, client)
+}
+
+func serviceWorkingDirectory(layout state.Layout, m *manifest.Manifest, workspaceRoot string, service *manifest.Service) (string, error) {
+	roots, err := checkout.Resolve(context.Background(), layout, &manifest.Loaded{Manifest: *m, WorkspaceRoot: workspaceRoot}, service, nil)
+	if err != nil {
+		return "", err
+	}
+	return roots.WorkingDirectory, nil
 }
 
 func MateriallyEqual(left, right Snapshot) bool {

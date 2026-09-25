@@ -65,7 +65,7 @@ func stopRuntime(ctx context.Context, active Active) error {
 	for index := len(active.Manifest.Services) - 1; index >= 0; index-- {
 		service := &active.Manifest.Services[index]
 		if service.Source == "compose" {
-			if err := serviceexec.ComposeShutdown(active.Manifest, service, active.Runtime.WorkspaceRoot, ctx); err != nil {
+			if err := serviceexec.ComposeShutdown(ctx, active.Layout, active.Manifest, service, active.Runtime.WorkspaceRoot); err != nil {
 				failures = append(failures, service.Name+": "+err.Error())
 			}
 		}

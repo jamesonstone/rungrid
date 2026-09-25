@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/jamesonstone/rungrid/internal/manifest"
+	"github.com/jamesonstone/rungrid/internal/state"
 )
 
 func TestExecUsesConfiguredWorkingDirectory(t *testing.T) {
@@ -105,7 +106,7 @@ func TestComposeShutdownUsesExactConfiguredArguments(t *testing.T) {
 	}
 
 	m := &manifest.Manifest{Repositories: map[string]manifest.Repository{"backend": {Path: "backend"}}, Services: []manifest.Service{*service}}
-	if err := ComposeShutdown(m, service, root, context.Background()); err != nil {
+	if err := ComposeShutdown(context.Background(), state.Layout{}, m, service, root); err != nil {
 		t.Fatal(err)
 	}
 	content, err := os.ReadFile(logPath)
