@@ -88,20 +88,23 @@ rungrid worktrees prune
 Select an existing linked worktree for one service, then start that service
 from the selected checkout. Creating the worktree remains `git worktree add`
 or Kit. The binding is project-local state, so two services in the same Git
-repository can run from different registered checkouts:
+repository can run from different registered checkouts. On a TTY, omit the
+subcommand or arguments to pick from a numbered list:
 
 ```sh
-rungrid worktrees list
+rungrid worktrees
+rungrid worktrees use
 rungrid worktrees use api GH-12
 rungrid worktrees use api --clear
 ```
 
 Bring selected feature worktrees up to date, and optionally the default
-branches too:
+branches too. On a TTY, `update` previews and confirms unless `--yes`:
 
 ```sh
+rungrid worktrees update
 rungrid worktrees update --dry-run
-rungrid worktrees update --sync
+rungrid worktrees update --sync --yes
 ```
 
 The prune command confirms removals interactively; automation must pass

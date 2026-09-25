@@ -1198,11 +1198,15 @@ selection. Provider output and exit status pass through unchanged.
 ### 11.13 worktrees
 
 ```text
+rungrid worktrees
 rungrid worktrees list [--json]
-rungrid worktrees use <service> [selector] [--clear]
-rungrid worktrees update [--service <name>]... [--sync] [--dry-run] [--json]
+rungrid worktrees use [service] [selector] [--clear]
+rungrid worktrees update [--service <name>]... [--sync] [--dry-run] [--yes] [--json]
 rungrid worktrees prune [--repository <name>]... [--dry-run] [--yes] [--json]
 ```
+
+With no subcommand, a TTY opens a numbered picker for list, use, and update.
+`--json` or a non-interactive stdin without a subcommand fails closed.
 
 `list` reports every declared service repository's registered worktrees,
 including the primary checkout, with branch, HEAD, and which services currently
@@ -1212,18 +1216,20 @@ select each path.
 service's Git repository. The selector is `primary`, an existing worktree path,
 a unique branch name, or a unique worktree directory base name such as
 `GH-12`. `--clear` removes the binding so the service uses the declared
-repository root again. With no selector, an interactive numbered picker lists
-only that repository's worktrees. `--json` or a non-interactive stdin without a
-selector fails closed. Detached HEAD, missing paths, foreign repositories, and
-unregistered directories are refused. The binding is project-local state and
-does not change the portable manifest.
+repository root again. With no service or selector, an interactive numbered
+picker lists services and then only that repository's worktrees. `--json` or a
+non-interactive stdin without those values fails closed. Detached HEAD, missing
+paths, foreign repositories, and unregistered directories are refused. The
+binding is project-local state and does not change the portable manifest.
 
 `update` fast-forwards each targeted service's selected feature-branch worktree
 with fetch plus `merge --ff-only` after expected-OID checks. It skips the
 primary/default checkout. Dirty, ahead, diverged, detached, or untracked
 worktrees are preserved with an exact reason. `--sync` also runs the existing
 default-branch `sync` contract. `--dry-run` may query remotes but does not
-fetch, write refs, write state, or pause processes.
+fetch, write refs, write state, or pause processes. On a TTY, omitted `--service`
+and `--sync` flags are prompted, a preview is printed, and apply requires
+confirmation unless `--yes` or `--dry-run`.
 
 `prune` inspects exact registered linked worktrees once per Git common
 directory. A candidate must be canonical, clean, inactive, non-primary,

@@ -45,6 +45,14 @@ references:
     read_policy: must
     used_for: delivery ownership
     status: active
+  - id: interactive-issue
+    name: Interactive worktree command issue
+    type: issue
+    target: https://github.com/jamesonstone/rungrid/issues/51
+    relation: tracks
+    read_policy: must
+    used_for: interactive TTY command ownership
+    status: active
 skills: []
 delivery_intent: issue_branch_pr_ready
 ---
@@ -81,21 +89,27 @@ worktrees and/or default branches without creating lanes or rewriting history.
 - `rungrid worktrees list` reports every declared service repository's
   registered worktrees, including the primary, with branch, HEAD, primary flag,
   and which services currently select each checkout.
-- `rungrid worktrees use <service> [selector]` binds that service only.
+- `rungrid worktrees` with no subcommand opens a numbered action picker on a
+  TTY for list, use, and update. `--json` or a non-TTY invocation without a
+  subcommand fails closed.
+- `rungrid worktrees use [service] [selector]` binds that service only.
   Selector is `primary`, an existing worktree path, a unique branch name, or a
   unique worktree directory base name. `--clear` removes the binding.
-- With no selector, an interactive picker lists only that service's repository
-  worktrees. Headless or `--json` invocation without a selector fails closed.
+- With no service and/or selector, an interactive picker lists services and
+  then only that service's repository worktrees. Headless or `--json`
+  invocation without those values fails closed.
 - A selected path must be an exact `git worktree list` entry whose Git common
   directory matches the service's declared repository. Detached HEAD, missing
   paths, foreign repositories, and unregistered directories are refused.
 - Native start, health, Compose up/down, managed shells, and Versions resolve
   `working_directory` and environment providers inside the selected checkout
   and may not escape it.
-- `rungrid worktrees update [--service name]... [--sync] [--dry-run]`
+- `rungrid worktrees update [--service name]... [--sync] [--dry-run] [--yes]`
   fast-forwards each targeted service's selected feature-branch worktree with
   fetch plus `merge --ff-only` (or expected-OID protection). `--sync` also runs
-  the existing default-branch `sync` contract for involved repositories.
+  the existing default-branch `sync` contract for involved repositories. On a
+  TTY, omitted service and sync flags are prompted, a dry-run preview is
+  shown, and apply requires confirmation unless `--yes` or `--dry-run`.
 - Dirty, ahead, diverged, detached, or untracked worktrees are preserved with
   an exact reason. Never checkout, rebase, reset, stash, or force-update.
 - Pause only services whose effective checkout is the worktree being updated.
@@ -147,6 +161,8 @@ worktrees and/or default branches without creating lanes or rewriting history.
 - A selected feature worktree may contain a `working_directory` that does not
   exist on the primary checkout. Resolve must bind the selected path first and
   only require the declared working directory when no selection is stored.
+- Numbered TTY pickers match prune and reconcile. `--json` and non-TTY stdin
+  stay fail-closed so scripts never block on a prompt.
 
 ## VALIDATION
 
