@@ -810,6 +810,11 @@ registration, and returns to its managed shell.
 Stopping an external service is an error because Rungrid does not own it.
 Starting or stopping one service never runs global lifecycle hooks.
 
+A successful stop records a generation-scoped stop intent in project state.
+`rungrid start` clears it for that service, and a freshly started runtime
+clears every stop intent. `rungrid resume` preserves a service with a recorded
+stop intent instead of restarting it.
+
 ### 9.5 Down
 
 `rungrid down`:
@@ -1353,6 +1358,36 @@ paths, access the network, generate state, or start services. Path values are
 never interpreted as shell input or agent instructions. With `--json`, the
 same brief and structured inputs are emitted in an `AgentInstructions`
 `rungrid/output/v1` envelope.
+
+### 11.22 resume
+
+```text
+rungrid resume [--no-open | --force-open]
+```
+
+Restores a workspace whose terminal presentation was lost, such as after Warp
+restarts, without treating it as a new start:
+
+- with a verified active runtime, resume never reruns lifecycle hooks and never
+  restarts a running service. It restarts each managed `workspace` service that
+  is not running through the `rungrid start` path, unless the operator stopped
+  it with `rungrid stop`. An open resource circuit is reported, never reset.
+  `tab` services are not started; their tabs own that lifecycle;
+- it reopens the full ordered Warp workspace only when no Rungrid window is
+  live, judged by a live Overview attach client or a live service-tab
+  registration for the runtime. Otherwise it opens only the absent service
+  tabs, so a partial restart never duplicates Overview or Versions.
+  `--force-open` always opens the full workspace, and `--no-open` or headless
+  mode opens nothing;
+- when the runtime is gone or unverifiable but the lifecycle journal shows it
+  was never shut down, resume recovers it through the `rungrid up` path,
+  including lifecycle prerequisites and terminal opening; and
+- a workspace that was never started or was shut down with `rungrid down` is
+  refused, so resume never silently starts a workspace.
+
+A service that could not restart makes resume exit with partial failure after
+the remaining services and windows are handled. With `--json`, the per-service
+actions are emitted in a `Resume` `rungrid/output/v1` envelope.
 
 ## 12. Machine-readable output
 

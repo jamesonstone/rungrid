@@ -50,6 +50,7 @@ Build & Launch
   generate       Generate owned project runtime artifacts
   up             Generate and start the detached workspace
   open           Open the Warp workspace or one service tab
+  resume         Restore Warp windows and services after a terminal restart
 
 Observe
   attach         Attach to the active Process Compose TUI

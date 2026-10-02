@@ -76,6 +76,9 @@ func upWorkspace(ctx context.Context, loaded *manifest.Loaded, options UpOptions
 		return UpResult{}, rollbackUp(layout, &journal, &effective.Manifest, err)
 	}
 
+	if err := clearAllStopIntents(layout); err != nil {
+		return UpResult{}, rollbackUp(layout, &journal, &effective.Manifest, err)
+	}
 	runtimeState, reused, err := supervisor.Start(ctx, supervisor.StartOptions{
 		Layout: layout, GenerationID: generated.Plan.GenerationID, EffectiveManifestSHA256: generated.Plan.ManifestSHA256,
 		WorkspaceRoot:  effective.WorkspaceRoot,

@@ -64,6 +64,7 @@ func newRootCommand() *cobra.Command {
 		newGenerateCommand(opt),
 		newUpCommand(opt),
 		newOpenCommand(opt),
+		newResumeCommand(opt),
 		newAttachCommand(opt),
 		newVersionsCommand(opt),
 		newStatusCommand(opt),

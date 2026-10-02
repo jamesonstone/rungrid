@@ -16,7 +16,7 @@ func TestRootExposesV1Commands(t *testing.T) {
 		}
 	}
 	for _, expected := range []string{
-		"init", "instructions", "doctor", "plan", "generate", "up", "open", "attach", "versions",
+		"init", "instructions", "doctor", "plan", "generate", "up", "open", "resume", "attach", "versions",
 		"status", "logs", "session", "start", "stop", "down", "uninstall", "config",
 		"sync", "reconcile", "worktrees",
 		"completion", "version",
