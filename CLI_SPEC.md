@@ -594,6 +594,7 @@ runtime.json
 lifecycle.json
 checkouts.json
 overrides.json
+exec-acks/
 stopped/
 lifecycle-logs/<generation-id>/
 resource-guard/
@@ -1487,8 +1488,12 @@ the resource guard, logs, tabs, and `resume`.
   stopped; the operator reruns the trigger in its tab. Global lifecycle hooks
   never run and keep their declared working directories. Unaffected services
   are never touched. Owned Warp Tab Configs are reinstalled so reopened tabs
-  carry the override title. A service that fails to restart, or whose state
-  cannot be read, makes the command exit with partial failure after the
+  carry the override title. Before replacing itself, `rungrid internal exec`
+  records the working directory it used. Each restarted service must
+  acknowledge the expected checkout. A runtime started by a Rungrid version
+  without overrides writes no acknowledgement, so its services are reported
+  as `restart-failed` with instructions to restart the workspace. A service
+  that fails to restart, fails to acknowledge, or whose state cannot be read, makes the command exit with partial failure after the
   override is recorded.
 - **Scope.** Overrides are runtime state scoped to the runtime generation. They
   survive `resume`, including runtime recovery. `down` removes them. A freshly

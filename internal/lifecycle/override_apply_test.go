@@ -5,7 +5,9 @@ package lifecycle
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/jamesonstone/rungrid/internal/manifest"
@@ -28,6 +30,9 @@ type fakeRuntime struct {
 	starts   []string
 	nextPID  int
 	startErr error
+	// legacyExec models a runtime whose wrappers run a Rungrid executable
+	// that predates overrides and writes no exec acknowledgement.
+	legacyExec bool
 }
 
 func newFakeRuntime(active Active, running ...string) *fakeRuntime {
@@ -63,6 +68,9 @@ func (f *fakeRuntime) start(ctx context.Context, name string) error {
 	execution, err := override.Resolve(ctx, f.active.Layout, f.active.Runtime.GenerationID, loaded, service, nil)
 	if err != nil {
 		return err
+	}
+	if !f.legacyExec {
+		_ = override.WriteAck(f.active.Layout, f.active.Runtime.GenerationID, name, execution.WorkingDirectory)
 	}
 	f.starts = append(f.starts, name)
 	f.nextPID++
@@ -167,6 +175,29 @@ func TestRestartAffectedHonorsActivationAndStopIntent(t *testing.T) {
 	services = applyFake(t, active, runtime, OverrideChange{Operation: "clear", Clear: []string{"svc"}}).Services
 	if services[0].Action != override.ActionRestartFailed || services[1].Action != override.ActionTabIdle {
 		t.Fatalf("services after clear = %#v", services)
+	}
+}
+
+func TestRestartReportsARuntimeThatCannotHonorOverrides(t *testing.T) {
+	previous := execAckTimeout
+	execAckTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { execAckTimeout = previous })
+	fixture := overridetest.New(t)
+	active := overrideActive(t, fixture)
+	runtime := newFakeRuntime(active, "alpha", "beta")
+	runtime.legacyExec = true
+	services := applyFake(t, active, runtime, OverrideChange{Operation: "set", Set: []override.Planned{planOverride(t, fixture, "svc", "GH-1")}}).Services
+	for _, item := range services {
+		if item.Action != override.ActionRestartFailed || !strings.Contains(item.Detail, "predates overrides") {
+			t.Fatalf("legacy runtime reported %#v", item)
+		}
+	}
+	if err := override.WriteAck(active.Layout, overrideGeneration, "alpha", fixture.Service); err != nil {
+		t.Fatal(err)
+	}
+	service, _ := manifest.FindService(active.Manifest, "alpha")
+	if problem := verifyExec(context.Background(), active, service); !strings.Contains(problem, "started in "+fixture.Service) {
+		t.Fatalf("wrong-directory acknowledgement: %q", problem)
 	}
 }
 

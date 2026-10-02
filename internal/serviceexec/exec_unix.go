@@ -16,6 +16,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/environment"
 	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/jamesonstone/rungrid/internal/manifest"
+	"github.com/jamesonstone/rungrid/internal/override"
 	"github.com/jamesonstone/rungrid/internal/state"
 )
 
@@ -83,6 +84,9 @@ func Exec(ctx context.Context, runtimeContext Context, serviceName string) error
 		return errs.New(errs.ExitUsage, "RG706", "service has no executable argument vector")
 	}
 	writeOverrideBanner(os.Stdout, service.Name, execution)
+	// Best effort: a missing acknowledgement makes override verification
+	// fail closed rather than blocking the service from starting.
+	_ = override.WriteAck(runtimeContext.Layout, runtimeContext.GenerationID, service.Name, workingDirectory)
 	executable, err := environment.LookPath(argv[0], workingDirectory, envMap)
 	if err != nil {
 		return errs.Wrap(errs.ExitDependency, "RG707", "resolve service executable", err)

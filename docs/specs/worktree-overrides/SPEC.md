@@ -274,6 +274,16 @@ guard, logs, tabs, and `resume`. Reverting takes one command.
 - Bubble Tea probes the terminal background with OSC 11 at startup. A PTY test
   harness must answer the probe, or the first keystrokes are consumed while
   the program waits. Real terminals answer it.
+- First run against a real Platform workspace: service wrappers exec the
+  Rungrid binary that started the runtime (`RUNGRID_EXECUTABLE`). A runtime
+  started by a pre-override build restarted labcore in its primary checkout
+  while `override set` reported success.
+  - Fix: `internal exec` writes an `exec-acks/<generation>-<service>`
+    acknowledgement of its working directory.
+  - `ApplyOverrides` clears the acknowledgement before the restart and
+    requires the expected directory afterwards. A missing acknowledgement is
+    reported as `restart-failed` with a restart-the-workspace instruction.
+  - Overrides therefore need a runtime started by an override-capable build.
 - An explicit `down` is the only place overrides are removed. Recovery inside
   `up` runs the same journal cleanup, so removing overrides there would drop
   them before resume could preserve them.
@@ -303,6 +313,8 @@ guard, logs, tabs, and `resume`. Reverting takes one command.
   - restart semantics for running workspace services, a preserved stop intent,
     tab-stopped, tab-idle, restart-failed, and unreadable state;
   - the `RG1824` changed-runtime refusal;
+  - exec acknowledgement checks: a legacy runtime and a wrong directory are
+    both reported as `restart-failed`;
   - seeding versus preserving on `up` and recovery;
   - status marking.
 - Integration test `TestOverrideLifecycleAcrossClearAndResume` runs on real

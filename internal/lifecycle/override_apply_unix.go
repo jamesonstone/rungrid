@@ -167,10 +167,13 @@ func restartAffected(
 			item.Action, item.Detail = override.ActionNotRunning, "its next start uses the new checkout"
 		default:
 			item.Action = override.ActionRestarted
+			override.RemoveAck(active.Layout, active.Runtime.GenerationID, service.Name)
 			if stopErr := stopForOverride(ctx, active, client, service.Name); stopErr != nil {
 				item.Action, item.Detail = override.ActionRestartFailed, stopErr.Error()
 			} else if startErr := start(ctx, service.Name); startErr != nil {
 				item.Action, item.Detail = override.ActionRestartFailed, startErr.Error()
+			} else if problem := verifyExec(ctx, active, service); problem != "" {
+				item.Action, item.Detail = override.ActionRestartFailed, problem
 			}
 		}
 		result = append(result, item)
