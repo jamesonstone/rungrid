@@ -35,7 +35,7 @@ func WriteStatusHuman(w io.Writer, style present.Style, status WorkspaceStatus) 
 	table := style.NewTable("SERVICE", "STATUS", "HEALTH", "PID", "SOURCE", "ACTIVATION", "OWNER")
 	for _, service := range status.Services {
 		table.Row(
-			present.ServiceGlyph(service.Status, service.Health)+" "+service.Name,
+			serviceNameCell(service),
 			serviceStatusText(service),
 			service.Health,
 			positiveNumber(service.PID),
@@ -44,7 +44,10 @@ func WriteStatusHuman(w io.Writer, style present.Style, status WorkspaceStatus) 
 			serviceOwner(service),
 		)
 	}
-	return table.Render(w, emptyServicesNote(status))
+	if err := table.Render(w, emptyServicesNote(status)); err != nil {
+		return err
+	}
+	return writeStatusOverrides(w, style, status.Overrides)
 }
 
 func emptyServicesNote(status WorkspaceStatus) string {

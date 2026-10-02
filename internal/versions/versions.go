@@ -4,8 +4,8 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/jamesonstone/rungrid/internal/checkout"
 	"github.com/jamesonstone/rungrid/internal/manifest"
+	"github.com/jamesonstone/rungrid/internal/override"
 	"github.com/jamesonstone/rungrid/internal/processcompose"
 	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
@@ -29,18 +29,24 @@ type ServiceVersion struct {
 	Commit     string `json:"commit,omitempty"`
 	GitState   string `json:"git_state"`
 	Worktree   string `json:"worktree,omitempty"`
+	Override   string `json:"override,omitempty"`
 }
 
 func Capture(ctx context.Context, m *manifest.Manifest, runtimeState supervisor.Runtime, client processcompose.Client) Snapshot {
 	return NewCollector().Capture(ctx, m, runtimeState, client)
 }
 
-func serviceWorkingDirectory(layout state.Layout, m *manifest.Manifest, workspaceRoot string, service *manifest.Service) (string, error) {
-	roots, err := checkout.Resolve(context.Background(), layout, &manifest.Loaded{Manifest: *m, WorkspaceRoot: workspaceRoot}, service, nil)
+// serviceWorkingDirectory returns where the service runs and, when a
+// repository override is active, the override checkout path.
+func serviceWorkingDirectory(layout state.Layout, generationID string, m *manifest.Manifest, workspaceRoot string, service *manifest.Service) (string, string, error) {
+	execution, err := override.Resolve(context.Background(), layout, generationID, &manifest.Loaded{Manifest: *m, WorkspaceRoot: workspaceRoot}, service, nil)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return roots.WorkingDirectory, nil
+	if execution.Override != nil {
+		return execution.WorkingDirectory, execution.Override.Path, nil
+	}
+	return execution.WorkingDirectory, "", nil
 }
 
 func MateriallyEqual(left, right Snapshot) bool {

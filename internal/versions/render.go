@@ -30,7 +30,7 @@ func WriteHuman(w io.Writer, style present.Style, snapshot Snapshot) {
 	for _, service := range snapshot.Services {
 		table.Row(
 			present.ServiceGlyph(service.State, service.Health)+" "+service.Name,
-			service.Repository,
+			repositoryCell(service),
 			service.State,
 			service.Health,
 			positiveNumber(service.PID),
@@ -40,6 +40,18 @@ func WriteHuman(w io.Writer, style present.Style, snapshot Snapshot) {
 		)
 	}
 	_ = table.Render(w, "no services are declared for this generation")
+	for _, service := range snapshot.Services {
+		if service.Override != "" {
+			_ = style.Note(w, present.EmojiOverride, service.Name+" runs from override "+service.Override+" ("+present.Fallback(service.Branch)+")")
+		}
+	}
+}
+
+func repositoryCell(service ServiceVersion) string {
+	if service.Override == "" {
+		return service.Repository
+	}
+	return service.Repository + " " + present.EmojiOverride + " override"
 }
 
 func formatPorts(ports []int) string {

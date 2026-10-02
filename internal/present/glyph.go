@@ -23,6 +23,7 @@ const (
 	EmojiArtifacts = "🗂️"
 	EmojiRecovery  = "🛟"
 	EmojiGuard     = "🛡️"
+	EmojiOverride  = "🔀"
 )
 
 // Result glyphs.

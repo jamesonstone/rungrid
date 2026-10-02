@@ -104,6 +104,7 @@ type Service struct {
 	Source           string            `yaml:"source" json:"source"`
 	Activation       string            `yaml:"activation,omitempty" json:"activation"`
 	WorkingDirectory string            `yaml:"working_directory,omitempty" json:"working_directory"`
+	Worktree         string            `yaml:"worktree,omitempty" json:"worktree,omitempty"`
 	Run              *Run              `yaml:"run,omitempty" json:"run,omitempty"`
 	Compose          *Compose          `yaml:"compose,omitempty" json:"compose,omitempty"`
 	External         *External         `yaml:"external,omitempty" json:"external,omitempty"`

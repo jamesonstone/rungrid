@@ -11,6 +11,7 @@ import (
 
 	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/jamesonstone/rungrid/internal/manifest"
+	"github.com/jamesonstone/rungrid/internal/override"
 	"github.com/jamesonstone/rungrid/internal/procidentity"
 	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
@@ -35,7 +36,17 @@ func DownProject(ctx context.Context, layout state.Layout) error {
 	return downProjectLocked(ctx, layout)
 }
 
+// downProjectLocked shuts the workspace down and then ends the runtime's
+// overrides. Recovery cleanup inside up does not come through here, so resume
+// can restore an interrupted workspace with its overrides intact.
 func downProjectLocked(ctx context.Context, layout state.Layout) error {
+	if err := shutdownProjectLocked(ctx, layout); err != nil {
+		return err
+	}
+	return override.Remove(layout)
+}
+
+func shutdownProjectLocked(ctx context.Context, layout state.Layout) error {
 	journal, exists, err := workspace.ReadJournalIfPresent(layout)
 	if err != nil {
 		return err

@@ -21,6 +21,9 @@ type Loaded struct {
 	LocalPath     string
 	SourceFiles   []string
 	MergedYAML    []byte
+	// WorktreeDeclarations maps service names to their declared worktree
+	// selector. Declarations are runtime overrides, not workspace identity.
+	WorktreeDeclarations map[string]string
 }
 
 func LoadGenerated(filename, root string) (*Manifest, error) {
@@ -133,6 +136,7 @@ func Load(configPath, localPath string) (*Loaded, error) {
 	if err := Validate(&result, resolvedRoot); err != nil {
 		return nil, err
 	}
+	declarations := extractWorktreeDeclarations(&result)
 	canonical, err := yaml.Marshal(result)
 	if err != nil {
 		return nil, errs.Wrap(errs.ExitFailure, "RG108", "encode normalized manifest", err)
@@ -145,6 +149,8 @@ func Load(configPath, localPath string) (*Loaded, error) {
 		LocalPath:     absLocal,
 		SourceFiles:   files,
 		MergedYAML:    canonical,
+
+		WorktreeDeclarations: declarations,
 	}, nil
 }
 
@@ -281,20 +287,4 @@ func cloneValue(value any) any {
 	default:
 		return value
 	}
-}
-
-func resolveExisting(filename string) (string, error) {
-	abs, err := filepath.Abs(filename)
-	if err != nil {
-		return "", err
-	}
-	return filepath.EvalSymlinks(filepath.Clean(abs))
-}
-
-func within(root, candidate string) bool {
-	rel, err := filepath.Rel(root, candidate)
-	if err != nil {
-		return false
-	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }

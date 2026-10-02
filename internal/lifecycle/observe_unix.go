@@ -15,6 +15,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/jamesonstone/rungrid/internal/guardstate"
 	"github.com/jamesonstone/rungrid/internal/manifest"
+	"github.com/jamesonstone/rungrid/internal/override"
 	"github.com/jamesonstone/rungrid/internal/processcompose"
 	"github.com/jamesonstone/rungrid/internal/session"
 	"github.com/jamesonstone/rungrid/internal/state"
@@ -33,6 +34,7 @@ type WorkspaceStatus struct {
 	Lifecycle           *WorkspaceLifecycleStatus `json:"lifecycle,omitempty"`
 	Services            []ServiceStatus           `json:"services"`
 	ResourceGuard       *guardstate.Status        `json:"resource_guard,omitempty"`
+	Overrides           []override.Entry          `json:"overrides,omitempty"`
 }
 
 type WorkspaceLifecycleStatus struct {
@@ -221,7 +223,7 @@ func InspectStatus(ctx context.Context, layout state.Layout) (WorkspaceStatus, e
 	result.Socket = runtimeState.Socket
 	result.Services = services
 	mergeGuardServiceStatus(result.Services, result.ResourceGuard)
-	return result, nil
+	return result, attachOverrides(layout, &result)
 }
 
 func mergeGuardServiceStatus(services []ServiceStatus, status *guardstate.Status) {

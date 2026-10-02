@@ -45,6 +45,15 @@ func newRootCommand() *cobra.Command {
 		Short:         "Run a reproducible local development workspace",
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		// Arguments that name no command may name a service: the
+		// `rungrid <service> [worktree]` override shortcut.
+		Args: cobra.ArbitraryArgs,
+	}
+	root.RunE = func(command *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return command.Help()
+		}
+		return runServiceShortcut(command, opt, args)
 	}
 	flags := root.PersistentFlags()
 	flags.StringVar(&opt.configPath, "config", ".rungrid.yaml", "manifest path")
@@ -75,6 +84,7 @@ func newRootCommand() *cobra.Command {
 		newSessionCommand(opt),
 		newStartCommand(opt),
 		newStopCommand(opt),
+		newOverrideCommand(opt),
 		newDownCommand(opt),
 		newUninstallCommand(opt),
 		newConfigCommand(opt),

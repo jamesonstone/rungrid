@@ -18,6 +18,7 @@ const marker = "# rungrid-managed-tab-config"
 type Template struct {
 	Filename string
 	TabName  string
+	Title    string
 	Service  string
 	Content  []byte
 }
@@ -76,14 +77,14 @@ shell = "zsh"
 commands = ["@@COMMAND@@"]
 is_focused = true
 `, marker, projectID, generationID, strconv.Quote(tabName), strconv.Quote(title))
-	return Template{Filename: tabName + ".toml.tmpl", TabName: tabName, Service: service, Content: []byte(content)}
+	return Template{Filename: tabName + ".toml.tmpl", TabName: tabName, Title: title, Service: service, Content: []byte(content)}
 }
 
 func Install(layout state.Layout, m *manifest.Manifest, generationID, rungridExecutable string) (InstallRecord, error) {
 	if err := layout.Ensure(); err != nil {
 		return InstallRecord{}, err
 	}
-	templates := Templates(m, generationID)
+	templates := overrideTitles(layout, m, generationID, Templates(m, generationID))
 	destination, err := tabConfigDirectory()
 	if err != nil {
 		return InstallRecord{}, err
