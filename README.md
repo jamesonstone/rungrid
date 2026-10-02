@@ -60,6 +60,14 @@ tab-owned applications, validate the result, and keep `.rungrid.yaml` as the
 single service inventory. Supplied paths are printed as data and are never
 executed. The command does not require a manifest or mutate workspace state.
 
+If Warp restarts and the workspace windows disappear, restore them without a
+fresh start. Resume reuses the live runtime, restarts workspace services that
+stopped without `rungrid stop`, and reopens only the missing windows:
+
+```sh
+rungrid resume
+```
+
 Headless operation uses the same lifecycle:
 
 ```sh

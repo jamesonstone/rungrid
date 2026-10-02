@@ -53,6 +53,9 @@ func Start(ctx context.Context, active Active, serviceName string, resetResource
 	if err := prepareResourceCircuit(active, serviceName, resetResourceCircuit); err != nil {
 		return "", err
 	}
+	if err := clearStopIntent(active.Layout, active.Runtime.GenerationID, serviceName); err != nil {
+		return "", err
+	}
 	if service.Activation == "tab" {
 		if _, live := terminalshell.ActiveTab(active.Layout, active.Runtime.GenerationID, serviceName); live {
 			return fmt.Sprintf("tab already exists; run %s there", formatArgv(service.Terminal.TriggerArgv)), nil
@@ -130,7 +133,10 @@ func Stop(ctx context.Context, active Active, serviceName string) error {
 	if service.Source == "external" {
 		return errs.New(errs.ExitUsage, "RG1112", "Rungrid does not own external service lifecycle")
 	}
-	return supervisor.Client(active.Layout, active.Runtime).Stop(ctx, serviceName)
+	if err := supervisor.Client(active.Layout, active.Runtime).Stop(ctx, serviceName); err != nil {
+		return err
+	}
+	return recordStopIntent(active.Layout, active.Runtime.GenerationID, serviceName)
 }
 
 func waitForService(ctx context.Context, client processcompose.Client, layout state.Layout, generationID string, service *manifest.Service) error {
