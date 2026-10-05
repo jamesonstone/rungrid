@@ -398,6 +398,8 @@ Each service supports:
 - `source`: `native`, `compose`, or `external`;
 - `activation`: `workspace` or `tab`;
 - `working_directory`: directory relative to the selected repository;
+- `worktree`: optional checkout selector for a repository override (see
+  section 11.23); it is a runtime input, not workspace identity;
 - exactly one source block appropriate to `source`;
 - `environment` providers and literal non-secret values;
 - `depends_on` lifecycle requirements;
@@ -591,6 +593,9 @@ generations/<generation-id>/
 runtime.json
 lifecycle.json
 checkouts.json
+overrides.json
+exec-acks/
+stopped/
 lifecycle-logs/<generation-id>/
 resource-guard/
   baselines/
@@ -619,6 +624,11 @@ teardown is required it remains required until every configured `after_down`
 command completes successfully, even if the supervisor never started or its
 runtime record is absent. Command output is redacted and stored in private,
 generation-scoped lifecycle logs rather than deterministic artifacts.
+
+`overrides.json` records the repository overrides of exactly one runtime
+generation: project, generation, and per repository the original and override
+checkout paths, branch, HEAD, dirty state, source, affected services, and every
+re-anchored argument. Entries recorded for another generation are ignored.
 
 Resource-guard state is private and atomic. Every baseline, incident, status,
 control-client registration, and circuit-reset request carries the complete
@@ -736,10 +746,13 @@ identity mismatch remains a fail-closed conflict.
    with exact runtime identity, retiring only a conclusively dead, unchanged
    runtime record whose PID and socket are both absent;
 3. finishes any required cleanup before accepting a different generation;
-4. plans and generates, then atomically records `starting` and teardown intent;
+4. validates `--override` flags and manifest `worktree` declarations, plans and
+   generates, then atomically records `starting` and teardown intent;
 5. runs `before_up` sequentially in manifest order;
 6. starts or safely reuses the detached Process Compose daemon only after every
-   prerequisite succeeds;
+   prerequisite succeeds; a freshly started runtime first clears stop intents
+   and leftover overrides, then records the validated overrides, so no
+   service starts from the wrong checkout;
 7. waits for workspace-owned services and external dependencies;
 8. opens the ordered Warp workspace unless headless or explicitly disabled;
 9. waits for requested tab-owned services to report a lifecycle state;
@@ -836,7 +849,7 @@ A partial failure is reported per action and produces a non-zero exit. Rungrid
 continues safe independent shutdown and teardown actions. Cleanup failure
 retains `cleanup-required`, including the sanitized failure, so a later `down`
 can retry. Successful teardown records `inactive`; repeated `down` is then a
-no-op.
+no-op. A successful `down` also removes every repository override.
 
 Rungrid never silently reruns prerequisites for an unverified stale runtime.
 Generation or lifecycle-hash mismatch is explicit. Cleanup required by an old
@@ -887,7 +900,9 @@ It displays, for every included service:
 - selected logical repository and Git branch and short commit for the service
   working directory;
 - clean, dirty, or unavailable source-control state;
-- worktree identity when available.
+- worktree identity when available;
+- an override marker and the override checkout path when the service runs
+  from a repository override.
 
 Output refreshes without clearing terminal scrollback unnecessarily and reacts
 to terminal resizing. `--once` prints one snapshot. `--json` emits a
@@ -912,6 +927,11 @@ starts a new session. Any other invocation resolves and executes the original
 command unchanged. Wrapper recursion is prevented by recording the resolved
 original executable before function installation.
 
+A managed shell opens in the service's effective working directory, which is
+the repository override when one is active. Installed Tab Configs title an
+overridden service's tab with the override branch; the generated templates are
+unchanged.
+
 Closing the tab sends HUP to the managed shell, which stops the service and
 releases the lock. Ctrl-C while logs are foregrounded has the same ownership
 effect without closing the tab.
@@ -931,7 +951,11 @@ Global syntax:
 
 ```text
 rungrid [global flags] <command> [arguments]
+rungrid [global flags] <service> [worktree]
 ```
+
+The second form is the repository-override shortcut of section 11.23. A
+built-in command always wins over a service of the same name.
 
 Global flags:
 
@@ -1049,13 +1073,18 @@ stale, modified, or nondeterministic.
 ### 11.5 up
 
 ```text
-rungrid up [service ...] [--headless] [--no-open]
+rungrid up [service ...] [--headless] [--no-open] [--override <repository|service>=<path|worktree>]...
 ```
 
 Starts or reuses the workspace runtime, waits for workspace activation, and
 opens Warp unless disabled. It runs prerequisites and rollback according to the
 lifecycle contract. Optional service arguments identify tab services whose
 lifecycle state must be observed before success.
+
+`--override` is repeatable and validated before any mutation. A freshly started
+runtime starts from the requested checkouts plus the manifest's `worktree`
+declarations, with flags winning for the same repository. A reused runtime
+applies only the flags, through the section 11.23 restart path.
 
 ### 11.6 open
 
@@ -1097,7 +1126,9 @@ rungrid status [service ...] [--json]
 ```
 
 Reports runtime identity, generation, service lifecycle/health, ownership, and
-readiness without mutation. It also reports lifecycle journal state, teardown
+readiness without mutation. Services running from a repository override are
+marked, and an Overrides table lists each override's repository, path, branch,
+dirty state, and services. It also reports lifecycle journal state, teardown
 requirement, completed prerequisites, and the latest sanitized cleanup failure,
 including when no supervisor exists.
 
@@ -1385,9 +1416,143 @@ restarts, without treating it as a new start:
 - a workspace that was never started or was shut down with `rungrid down` is
   refused, so resume never silently starts a workspace.
 
+Resume keeps the generation's repository overrides on both paths: restarted
+services and a recovered runtime run from the same override checkouts.
+
 A service that could not restart makes resume exit with partial failure after
 the remaining services and windows are handled. With `--json`, the per-service
 actions are emitted in a `Resume` `rungrid/output/v1` envelope.
+
+### 11.23 override
+
+```text
+rungrid <service> [worktree]
+rungrid override set <repository|service> <path|worktree>
+rungrid override clear [repository|service]
+rungrid override list [--json]
+rungrid override sync
+rungrid up --override <repository|service>=<path|worktree>
+```
+
+A repository override runs every managed service of one repository from
+another checkout of that repository, normally a linked worktree holding an
+in-flight change. Rungrid keeps supervising the services from there, including
+the resource guard, logs, tabs, and `resume`.
+
+- **Keying.** The repository of a service is the Git top level of its declared
+  working directory. It is named by the declared logical repository when that
+  repository's root is the top level, and otherwise by the top level's
+  workspace-relative path. Every managed service in the repository switches
+  together. A service-name target resolves to its repository, and the output
+  names the repository and every affected service. `external` services in the
+  repository keep their own location.
+- **Checkout selector.** A path (absolute, `~`-relative, or relative to the
+  current directory), the branch or directory name of a registered worktree of
+  the repository, or `primary`. `primary`, or the original checkout itself,
+  clears the override.
+- **Validation** fails closed before any state or process changes:
+  - the checkout must exist and must be a Git checkout of the same repository,
+    by equal Git common directory or equal normalized `origin` URL;
+  - each affected service's working directory must exist in it;
+  - Compose files and environment-provider paths must stay inside it. The
+    check is the same symlink-resolving one used at execution, so a
+    non-optional provider file must also exist;
+  - unknown targets, ambiguous or unknown worktree names, `external` services,
+    and repositories with only external services are refused;
+  - a checkout with uncommitted changes is accepted with a warning, as is a
+    Compose service without `project_name`, whose Compose project then
+    derives from the new directory.
+- **Relative argv paths.** Paths in run, health, and Compose argument vectors
+  resolve against the working directory, which moves with the override. An
+  argument, or the value of a `--flag=value` or `NAME=value` argument,
+  containing a `..` segment is walked lexically from the original working
+  directory:
+  - if it never leaves the original checkout, it is unchanged and follows the
+    override;
+  - if it leaves and re-enters, it is rewritten to the absolute mapped path in
+    the override;
+  - if it ends outside the original checkout, it is rewritten to its absolute
+    original path, so the same file runs as before.
+
+  Absolute arguments are never changed. Every rewrite is reported by `set`,
+  `list`, `--json`, and the service's log banner. A `command` environment
+  provider whose arguments would need a rewrite is refused instead.
+- **Applying.** `set`, `clear`, and `sync` require a verified active runtime
+  and hold the project lifecycle lock. A runtime whose generation or
+  supervisor changed while the command waited for the lock is refused with
+  nothing changed. Each affected `workspace` service that
+  is running is stopped through Process Compose without recording a stop
+  intent, then started through the `rungrid start` path. A service that is not
+  running is left alone: a service stopped with `rungrid stop` stays stopped,
+  and its next start uses the override. A running `tab` service process is
+  stopped; the operator reruns the trigger in its tab. Global lifecycle hooks
+  never run and keep their declared working directories. Unaffected services
+  are never touched. Owned Warp Tab Configs are reinstalled so reopened tabs
+  carry the override title. Before replacing itself, `rungrid internal exec`
+  records the working directory it used. Each restarted service must
+  acknowledge the expected checkout. A runtime started by a Rungrid version
+  without overrides writes no acknowledgement, so its services are reported
+  as `restart-failed` with instructions to restart the workspace. A service
+  that fails to restart, fails to acknowledge, or whose state cannot be read, makes the command exit with partial failure after the
+  override is recorded.
+- **Scope.** Overrides are runtime state scoped to the runtime generation. They
+  survive `resume`, including runtime recovery. `down` removes them. A freshly
+  started runtime begins with none, except `--override` flags and `worktree`
+  declarations.
+- **Declarations.** A service's `worktree` field in the manifest or local
+  overlay names a checkout selector for its repository. Declarations are
+  removed from the normalized manifest, so they never change the generation.
+  `override sync` makes the active overrides equal the declarations: it sets
+  every declared repository and clears every other override. Services of one
+  repository that declare different selectors are refused.
+- **Shortcut.** `rungrid <service> <worktree>` equals
+  `rungrid override set <service> <worktree>`. Without a worktree, an
+  interactive terminal opens an action menu, currently only `worktree`. That
+  action lists the repository's registered worktrees, most recently updated
+  first, with the current marker, branch, short HEAD, updated and created
+  times, clean or dirty state, HEAD subject, and path. Both lists move with
+  the arrow keys or `j` and `k`, select with Enter, and cancel with `q` or
+  Escape without changing anything. `--json` or a non-interactive stdin
+  without a worktree fails closed.
+- **Visibility.** `status` and `versions` mark overridden services and show
+  the override path and branch. Each overridden start writes a banner to the
+  service log, which the Overview shows. A managed tab shell opens in the
+  override directory.
+- **Environment.** Rungrid never copies, writes, or synthesizes environment
+  files for an override. The override checkout's own environment material
+  applies through the service's existing mechanism. Preparing it, and
+  installing dependencies, is the caller's responsibility.
+
+`set`, `clear`, `sync`, and the shortcut emit an `OverrideReport` envelope
+with `--json`. `list` emits `OverrideList`. Each entry reports the repository,
+original path, path, branch, HEAD OID, dirty state, source, set time, affected
+services, and re-anchored arguments; `list` reads the branch, HEAD, and dirty
+state live.
+
+Diagnostics:
+
+| Code | Meaning |
+| --- | --- |
+| `RG1801`–`RG1804` | override state is unreadable, invalid, foreign, or unwritable |
+| `RG1805` | unknown service or repository |
+| `RG1806` | the target is an external service |
+| `RG1807` | the repository has only external services |
+| `RG1808` | the override path does not exist or is not a directory |
+| `RG1809` | the override path is not a Git checkout |
+| `RG1810` | the checkout belongs to a different repository |
+| `RG1811`, `RG1812` | the worktree selector is ambiguous, unknown, or empty |
+| `RG1813` | a service working directory is missing from the checkout |
+| `RG1814` | a Compose file or environment provider leaves the checkout |
+| `RG1815` | no active runtime; start with `rungrid up --override` |
+| `RG1816` | conflicting declarations or flags for one repository |
+| `RG1817` | a malformed `--override` value |
+| `RG1818` | the override was recorded but a service did not restart |
+| `RG1819` | interactive selection needs a terminal |
+| `RG1820` | unknown command or service, or shortcut usage error |
+| `RG1821` | a recorded override checkout disappeared |
+| `RG1822` | the interactive selection was cancelled |
+| `RG1823` | the service does not run from a Git checkout |
+| `RG1824` | the runtime changed while waiting for the lifecycle lock |
 
 ## 12. Machine-readable output
 
@@ -1409,6 +1574,11 @@ existing field meaning may not change.
 
 Diagnostics have stable codes, severity, summary, optional field path, and a
 redacted detail. Human and JSON modes share codes.
+
+Repository overrides use kinds `OverrideReport` and `OverrideList`, described in
+section 11.23. `Up` data also carries the generation's `overrides`, and
+`status` service entries carry an `override` object with repository, path, and
+branch.
 
 Filesystem reconciliation uses kind `RepositoryReconcileReport`. Its data
 contains the deduplicated inventory, common directories, live default and local

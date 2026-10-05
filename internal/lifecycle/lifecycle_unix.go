@@ -10,6 +10,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/jamesonstone/rungrid/internal/guardstate"
 	"github.com/jamesonstone/rungrid/internal/manifest"
+	"github.com/jamesonstone/rungrid/internal/override"
 	"github.com/jamesonstone/rungrid/internal/state"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
 )
@@ -26,6 +27,12 @@ type UpOptions struct {
 	Headless         bool
 	Open             bool
 	Requested        []string
+	// Overrides seed a freshly started runtime. A reused runtime ignores them;
+	// callers apply them through ApplyOverrides instead.
+	Overrides []override.Entry
+	// PreserveOverrides keeps the current generation's overrides when resume
+	// recovers an interrupted runtime instead of starting clean.
+	PreserveOverrides bool
 }
 
 type UpResult struct {
@@ -47,6 +54,14 @@ type ServiceStatus struct {
 	SessionOwned  bool                      `json:"session_owned"`
 	TabRegistered bool                      `json:"tab_registered"`
 	ResourceGuard *guardstate.ServiceStatus `json:"resource_guard,omitempty"`
+	Override      *ServiceOverride          `json:"override,omitempty"`
+}
+
+// ServiceOverride marks a service running from a repository override.
+type ServiceOverride struct {
+	Repository string `json:"repository"`
+	Path       string `json:"path"`
+	Branch     string `json:"branch,omitempty"`
 }
 
 func LoadActive(ctx context.Context, projectID, stateOverride string) (Active, error) {

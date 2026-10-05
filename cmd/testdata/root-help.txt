@@ -36,6 +36,7 @@ Warp or a headless shell provides the operator surface.
 
 Usage
   rungrid [command]
+  rungrid <service> [worktree]   run a service's repository from a worktree
 
 Available Commands
 
@@ -67,6 +68,7 @@ Control
   session        Own a tab service until stop or signal
   start          Start a service using activation-aware behavior
   stop           Stop an exact managed service
+  override       Run a repository's services from another checkout of it
   down           Perform ordered workspace shutdown
 
 Cleanup & Utilities

@@ -17,7 +17,7 @@ var rootHelpSections = []helpCommandSection{
 	{title: "Build & Launch", commands: []string{"plan", "generate", "up", "open", "resume"}},
 	{title: "Observe", commands: []string{"attach", "versions", "status", "logs"}},
 	{title: "Maintain", commands: []string{"sync", "reconcile", "worktrees"}},
-	{title: "Control", commands: []string{"session", "start", "stop", "down"}},
+	{title: "Control", commands: []string{"session", "start", "stop", "override", "down"}},
 	{title: "Cleanup & Utilities", commands: []string{"uninstall", "completion", "version", "help"}},
 }
 
@@ -51,6 +51,9 @@ func renderRootHelp(command *cobra.Command, opt *options) error {
 		return err
 	}
 	if _, err := fmt.Fprintf(out, "  %s [command]\n", command.CommandPath()); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(out, "  %s <service> [worktree]   run a service's repository from a worktree\n", command.CommandPath()); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(out, "\n"+style.title("🧰", "Available Commands")); err != nil {

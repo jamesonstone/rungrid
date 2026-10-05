@@ -105,7 +105,7 @@ func recoverWorkspace(
 	if !opt.json && !opt.quiet {
 		announceUp(command.OutOrStdout(), presentStyle(command.OutOrStdout(), opt.noColor), &loaded.Manifest)
 	}
-	up, err := lifecycle.Up(ctx, loaded, lifecycle.UpOptions{StateOverride: opt.stateDir, GeneratorVersion: Version, Open: open})
+	up, err := lifecycle.Up(ctx, loaded, lifecycle.UpOptions{StateOverride: opt.stateDir, GeneratorVersion: Version, Open: open, PreserveOverrides: true})
 	if err != nil {
 		return lifecycle.ResumeResult{}, err
 	}

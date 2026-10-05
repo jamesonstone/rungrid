@@ -105,7 +105,8 @@ func (c *Collector) captureService(ctx context.Context, now time.Time, m *manife
 			item.Ports = append([]int(nil), ports...)
 		}
 	}
-	if directory, err := serviceWorkingDirectory(c.layout, m, runtimeState.WorkspaceRoot, service); err == nil {
+	if directory, overridePath, err := serviceWorkingDirectory(c.layout, runtimeState.GenerationID, m, runtimeState.WorkspaceRoot, service); err == nil {
+		item.Override = overridePath
 		source := c.source(ctx, now, directory)
 		item.Branch, item.Commit, item.GitState, item.Worktree = source.branch, source.commit, source.gitState, source.worktree
 	}

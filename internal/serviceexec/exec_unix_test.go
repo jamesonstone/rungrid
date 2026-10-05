@@ -106,7 +106,7 @@ func TestComposeShutdownUsesExactConfiguredArguments(t *testing.T) {
 	}
 
 	m := &manifest.Manifest{Repositories: map[string]manifest.Repository{"backend": {Path: "backend"}}, Services: []manifest.Service{*service}}
-	if err := ComposeShutdown(context.Background(), state.Layout{}, m, service, root); err != nil {
+	if err := ComposeShutdown(context.Background(), state.Layout{}, "", m, service, root); err != nil {
 		t.Fatal(err)
 	}
 	content, err := os.ReadFile(logPath)

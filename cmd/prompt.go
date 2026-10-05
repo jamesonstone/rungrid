@@ -7,17 +7,16 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/spf13/cobra"
 )
 
+// inputIsTTY reports whether stdin is an interactive terminal. A character
+// device is not enough: /dev/null is one, and a picker reading it never ends.
 func inputIsTTY(command *cobra.Command) bool {
 	input, ok := command.InOrStdin().(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := input.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+	return ok && term.IsTerminal(input.Fd())
 }
 
 func requireInteractive(command *cobra.Command, opt *options, message string) error {

@@ -13,6 +13,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/lifecycle"
 	"github.com/jamesonstone/rungrid/internal/maintenance"
 	"github.com/jamesonstone/rungrid/internal/output"
+	"github.com/jamesonstone/rungrid/internal/override"
 	"github.com/jamesonstone/rungrid/internal/planner"
 	"github.com/jamesonstone/rungrid/internal/present"
 	"github.com/jamesonstone/rungrid/internal/state"
@@ -126,6 +127,7 @@ func newGenerateCommand(opt *options) *cobra.Command {
 
 func newUpCommand(opt *options) *cobra.Command {
 	var headless, noOpen, doSync bool
+	var overrideFlags []string
 	command := &cobra.Command{
 		Use:   "up [service ...]",
 		Short: "Generate and start the detached workspace",
@@ -178,6 +180,10 @@ func newUpCommand(opt *options) *cobra.Command {
 			open := loaded.Manifest.Terminal.Open != nil && *loaded.Manifest.Terminal.Open && !noOpen
 			ctx, cancel := signal.NotifyContext(command.Context(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 			defer cancel()
+			seeded, flagged, err := planUpOverrides(ctx, loaded, overrideFlags)
+			if err != nil {
+				return err
+			}
 			verbose := !opt.json && !opt.quiet
 			style := presentStyle(command.OutOrStdout(), opt.noColor)
 			if verbose {
@@ -185,21 +191,17 @@ func newUpCommand(opt *options) *cobra.Command {
 			}
 			result, err := lifecycle.Up(ctx, loaded, lifecycle.UpOptions{
 				StateOverride: opt.stateDir, GeneratorVersion: Version, Headless: headless, Open: open, Requested: args,
+				Overrides: override.Entries(seeded),
 			})
 			if err != nil {
 				return err
 			}
-			if opt.json {
-				return output.WriteJSON(command.OutOrStdout(), "Up", loaded.Manifest.Project.ID, result, nil)
-			}
-			if verbose {
-				summarizeUp(command.OutOrStdout(), style, result)
-			}
-			return nil
+			return finishUpOverrides(ctx, command, opt, loaded, result, flagged)
 		},
 	}
 	command.Flags().BoolVar(&headless, "headless", false, "do not create or open terminal files")
 	command.Flags().BoolVar(&noOpen, "no-open", false, "do not open Warp")
 	command.Flags().BoolVar(&doSync, "sync", false, "fast-forward configured repositories' default branches before starting")
+	command.Flags().StringArrayVar(&overrideFlags, "override", nil, "run <repository|service>=<path|worktree> from another checkout (repeatable)")
 	return command
 }

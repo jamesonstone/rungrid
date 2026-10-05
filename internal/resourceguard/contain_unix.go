@@ -42,7 +42,7 @@ func (w *worker) contain(ctx context.Context, monitor *serviceMonitor, observed 
 	cancel()
 	if w.candidateAlive(ctx, verified) && monitor.service.Source == "compose" {
 		composeContext, composeCancel := context.WithTimeout(ctx, grace)
-		_ = serviceexec.ComposeShutdown(composeContext, w.layout, w.manifest, monitor.service, w.runtime.WorkspaceRoot)
+		_ = serviceexec.ComposeShutdown(composeContext, w.layout, w.runtime.GenerationID, w.manifest, monitor.service, w.runtime.WorkspaceRoot)
 		composeCancel()
 	}
 	if w.candidateAlive(ctx, verified) {

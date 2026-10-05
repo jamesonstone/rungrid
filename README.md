@@ -106,6 +106,35 @@ rungrid worktrees use api GH-12
 rungrid worktrees use api --clear
 ```
 
+To test an in-flight fix while the workspace runs, point a repository's
+services at the worktree that holds it. Every managed service of that
+repository switches together. Running workspace services restart through
+`rungrid start` with the resource guard, logs, and `resume` intact, and nothing
+else is touched. Revert with one command:
+
+```sh
+rungrid api GH-12                 # same as: rungrid override set api GH-12
+rungrid api                       # TTY: action menu, then a worktree picker (newest first)
+rungrid override list
+rungrid override clear api
+rungrid up --override api=~/worktrees/acme/api/GH-12
+```
+
+Overrides are runtime state. `resume` keeps them and `down` ends them. A
+service's optional `worktree: GH-12` field in `.rungrid.yaml` or
+`.rungrid.local.yaml` declares one: a fresh `up` applies it, and
+`rungrid override sync` applies edited declarations to a running workspace
+without changing its generation. Relative argv paths that leave the repository,
+such as `../platform/tooling/run.sh`, are re-anchored to their original
+location and reported, so the same helper script still runs.
+
+Rungrid never copies or writes environment files for an override. Services that
+run `direnv exec . …` pick up the override checkout's own `.env`/`.envrc`. The
+calling workspace prepares that file (for example with its own `make env`) and
+installs dependencies in the worktree. With Air or another file watcher as the
+service command, edits in the worktree then hot-reload under Rungrid
+supervision.
+
 Bring selected feature worktrees up to date, and optionally the default
 branches too. On a TTY, `update` previews and confirms unless `--yes`:
 
@@ -206,14 +235,17 @@ implementation rationale lives in
 [docs/specs/rungrid-v1/SPEC.md](docs/specs/rungrid-v1/SPEC.md), with repository
 maintenance decisions in
 [docs/specs/repository-maintenance/SPEC.md](docs/specs/repository-maintenance/SPEC.md),
-and filesystem reconciliation in
-[docs/specs/repository-reconcile/SPEC.md](docs/specs/repository-reconcile/SPEC.md).
+filesystem reconciliation in
+[docs/specs/repository-reconcile/SPEC.md](docs/specs/repository-reconcile/SPEC.md),
+and repository overrides in
+[docs/specs/worktree-overrides/SPEC.md](docs/specs/worktree-overrides/SPEC.md).
 
 ## Commands
 
 Rungrid v1 provides `init`, `doctor`, `plan`, `generate`, `up`, `open`,
-`attach`, `versions`, `status`, `logs`, `sync`, `reconcile`, `worktrees prune`,
-`session`, `start`, `stop`, `down`, `uninstall`, `config`, `instructions`
+`attach`, `versions`, `status`, `logs`, `sync`, `reconcile`, `worktrees`,
+`resume`, `session`, `start`, `stop`, `override` (and the `rungrid <service>
+[worktree]` shortcut), `down`, `uninstall`, `config`, `instructions`
 (alias `agent-start`), `completion`, and `version`. Every JSON-capable command
 uses a `rungrid/output/v1` envelope.
 

@@ -99,6 +99,9 @@ func Validate(m *Manifest, root string) error {
 		if service.Source == "external" && service.Activation != "workspace" {
 			add(prefix+".activation", "external services must use workspace activation")
 		}
+		if service.Source == "external" && service.Worktree != "" {
+			add(prefix+".worktree", "external services are not owned by Rungrid and cannot be overridden")
+		}
 		repositoryRoot, repositoryOK := repositoryRoots[service.Repository]
 		if !serviceNamePattern.MatchString(service.Repository) {
 			add(prefix+".repository", "must match [a-z][a-z0-9-]*")

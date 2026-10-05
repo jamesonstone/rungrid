@@ -93,7 +93,7 @@ func RunShell(ctx context.Context, options ShellOptions) error {
 			return errs.Wrap(errs.ExitFailure, "RG1004", "resolve user zsh configuration directory", err)
 		}
 	}
-	workingDirectory, err := checkoutWorkingDirectory(options.Layout, options.Manifest, options.Runtime.WorkspaceRoot, service)
+	workingDirectory, err := checkoutWorkingDirectory(options.Layout, options.Runtime.GenerationID, options.Manifest, options.Runtime.WorkspaceRoot, service)
 	if err != nil {
 		return err
 	}
@@ -201,7 +201,7 @@ func RunTrigger(ctx context.Context, layout state.Layout, runtimeState superviso
 		return errs.New(errs.ExitConflict, "RG1010", "managed shell original PATH is missing")
 	}
 	environmentMap := map[string]string{"PATH": originalPath}
-	workingDirectory, err := checkoutWorkingDirectory(layout, m, runtimeState.WorkspaceRoot, service)
+	workingDirectory, err := checkoutWorkingDirectory(layout, runtimeState.GenerationID, m, runtimeState.WorkspaceRoot, service)
 	if err != nil {
 		return err
 	}

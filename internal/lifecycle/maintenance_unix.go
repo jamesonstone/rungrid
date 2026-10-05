@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jamesonstone/rungrid/internal/checkout"
 	"github.com/jamesonstone/rungrid/internal/maintenance"
 	"github.com/jamesonstone/rungrid/internal/manifest"
+	"github.com/jamesonstone/rungrid/internal/override"
 	"github.com/jamesonstone/rungrid/internal/session"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
 )
@@ -146,7 +146,7 @@ func (c *MaintenanceCoordinator) runningServices(ctx context.Context, worktreePa
 		if service.Source == "external" {
 			continue
 		}
-		repositoryRoot, err := checkout.Resolve(ctx, c.active.Layout, &manifest.Loaded{Manifest: *c.active.Manifest, WorkspaceRoot: c.active.Runtime.WorkspaceRoot}, service, nil)
+		repositoryRoot, err := override.Resolve(ctx, c.active.Layout, c.active.Runtime.GenerationID, &manifest.Loaded{Manifest: *c.active.Manifest, WorkspaceRoot: c.active.Runtime.WorkspaceRoot}, service, nil)
 		if err != nil {
 			return nil, err
 		}

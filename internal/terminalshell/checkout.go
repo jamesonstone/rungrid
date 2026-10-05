@@ -5,15 +5,17 @@ package terminalshell
 import (
 	"context"
 
-	"github.com/jamesonstone/rungrid/internal/checkout"
 	"github.com/jamesonstone/rungrid/internal/manifest"
+	"github.com/jamesonstone/rungrid/internal/override"
 	"github.com/jamesonstone/rungrid/internal/state"
 )
 
-func checkoutWorkingDirectory(layout state.Layout, m *manifest.Manifest, root string, service *manifest.Service) (string, error) {
-	roots, err := checkout.Resolve(context.Background(), layout, &manifest.Loaded{Manifest: *m, WorkspaceRoot: root}, service, nil)
+// checkoutWorkingDirectory is where a managed tab shell opens: the active
+// repository override, a worktrees-use binding, or the declared directory.
+func checkoutWorkingDirectory(layout state.Layout, generationID string, m *manifest.Manifest, root string, service *manifest.Service) (string, error) {
+	execution, err := override.Resolve(context.Background(), layout, generationID, &manifest.Loaded{Manifest: *m, WorkspaceRoot: root}, service, nil)
 	if err != nil {
 		return "", err
 	}
-	return roots.WorkingDirectory, nil
+	return execution.WorkingDirectory, nil
 }

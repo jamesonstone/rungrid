@@ -77,6 +77,13 @@ func ResolveEnvironment(
 	return flatten(values), values, nil
 }
 
+// CheckProviderPath applies the execution-time provider containment check:
+// candidate must resolve, through symlinks, inside root, and must exist unless
+// optional. Override validation uses it before stopping any service.
+func CheckProviderPath(root, candidate string, optional bool) error {
+	return ensureProviderPath(root, candidate, optional)
+}
+
 func ensureProviderPath(root, candidate string, optional bool) error {
 	resolvedRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {

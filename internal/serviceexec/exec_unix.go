@@ -16,6 +16,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/environment"
 	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/jamesonstone/rungrid/internal/manifest"
+	"github.com/jamesonstone/rungrid/internal/override"
 	"github.com/jamesonstone/rungrid/internal/state"
 )
 
@@ -69,18 +70,23 @@ func Exec(ctx context.Context, runtimeContext Context, serviceName string) error
 	if service.Source == "external" {
 		return errs.New(errs.ExitUsage, "RG705", "external services do not have supervised processes")
 	}
-	repositoryRoot, workingDirectory, err := serviceRoots(ctx, runtimeContext.Layout, runtimeContext.Manifest, runtimeContext.WorkspaceRoot, service)
+	execution, err := serviceRoots(ctx, runtimeContext.Layout, runtimeContext.GenerationID, runtimeContext.Manifest, runtimeContext.WorkspaceRoot, service)
 	if err != nil {
 		return err
 	}
-	envList, envMap, err := environment.Resolve(ctx, service, repositoryRoot)
+	workingDirectory := execution.WorkingDirectory
+	envList, envMap, err := environment.ResolveEnvironment(ctx, service.Environment, workingDirectory, execution.RepositoryRoot)
 	if err != nil {
 		return err
 	}
-	argv := serviceArgv(service)
+	argv := execution.Argv(serviceArgv(service))
 	if len(argv) == 0 {
 		return errs.New(errs.ExitUsage, "RG706", "service has no executable argument vector")
 	}
+	writeOverrideBanner(os.Stdout, service.Name, execution)
+	// Best effort: a missing acknowledgement makes override verification
+	// fail closed rather than blocking the service from starting.
+	_ = override.WriteAck(runtimeContext.Layout, runtimeContext.GenerationID, service.Name, workingDirectory)
 	executable, err := environment.LookPath(argv[0], workingDirectory, envMap)
 	if err != nil {
 		return errs.Wrap(errs.ExitDependency, "RG707", "resolve service executable", err)
@@ -102,16 +108,16 @@ func CheckHealth(ctx context.Context, runtimeContext Context, serviceName string
 	if service.Health == nil {
 		return nil
 	}
-	repositoryRoot, workingDirectory, err := serviceRoots(ctx, runtimeContext.Layout, runtimeContext.Manifest, runtimeContext.WorkspaceRoot, service)
+	execution, err := serviceRoots(ctx, runtimeContext.Layout, runtimeContext.GenerationID, runtimeContext.Manifest, runtimeContext.WorkspaceRoot, service)
 	if err != nil {
 		return err
 	}
-	envList, envMap, err := environment.Resolve(ctx, service, repositoryRoot)
+	envList, envMap, err := environment.ResolveEnvironment(ctx, service.Environment, execution.WorkingDirectory, execution.RepositoryRoot)
 	if err != nil {
 		return err
 	}
 	if service.Health.Command != nil {
-		return runHealthCommand(ctx, service.Health.Command.Argv, workingDirectory, envList, envMap)
+		return runHealthCommand(ctx, execution.Argv(service.Health.Command.Argv), execution.WorkingDirectory, envList, envMap)
 	}
 	return requestHealth(ctx, service.Health.URL, service.Health.Timeout.Duration)
 }
@@ -157,20 +163,21 @@ func WaitExternal(ctx context.Context, m *manifest.Manifest, root string, servic
 	}
 }
 
-func ComposeShutdown(ctx context.Context, layout state.Layout, m *manifest.Manifest, service *manifest.Service, root string) error {
+func ComposeShutdown(ctx context.Context, layout state.Layout, generationID string, m *manifest.Manifest, service *manifest.Service, root string) error {
 	if service.Compose == nil {
 		return nil
 	}
-	repositoryRoot, workingDirectory, err := serviceRoots(ctx, layout, m, root, service)
+	execution, err := serviceRoots(ctx, layout, generationID, m, root, service)
 	if err != nil {
 		return err
 	}
-	_, envMap, err := environment.Resolve(ctx, service, repositoryRoot)
+	workingDirectory := execution.WorkingDirectory
+	_, envMap, err := environment.ResolveEnvironment(ctx, service.Environment, workingDirectory, execution.RepositoryRoot)
 	if err != nil {
 		return err
 	}
 	argv := composeBase(service.Compose.DownArgv, service.Compose)
-	argv = append(argv, "stop", service.Compose.Service)
+	argv = execution.Argv(append(argv, "stop", service.Compose.Service))
 	executable, err := environment.LookPath(argv[0], workingDirectory, envMap)
 	if err != nil {
 		return errs.Wrap(errs.ExitDependency, "RG711", "resolve Compose shutdown executable", err)

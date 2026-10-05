@@ -167,6 +167,7 @@ func Schema() []byte {
         "source": {"enum": ["native", "compose", "external"]},
         "activation": {"enum": ["workspace", "tab"]},
         "working_directory": {"type": "string"},
+        "worktree": {"type": "string", "minLength": 1},
         "run": {
           "type": "object",
           "additionalProperties": false,

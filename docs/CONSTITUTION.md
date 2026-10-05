@@ -29,6 +29,14 @@
   workspace-relative and cannot name those checkouts. Service working
   directories, Compose files, and environment-provider paths must remain
   inside the selected checkout's symlink-aware boundary.
+- A repository override runs every managed service of one Git repository from
+  another checkout of that same repository. It is runtime state scoped to one
+  generation: resume keeps it, `down` ends it, and declarations never change
+  generation identity. It never applies to external services or lifecycle
+  hooks, restarts only affected services that were running, and never starts
+  a service the operator stopped. A relative argument that leaves the original
+  checkout keeps naming its original target; Rungrid never silently runs a
+  different file.
 - Subprocesses use argument vectors. User commands, environment values, and
   paths must not be interpolated into shell command strings.
 - Secrets resolve only at execution time and must be redacted from errors,
@@ -169,3 +177,6 @@
   native linked-worktree cleanup proof.
 - **Worktree prune:** a confirmed, immediately revalidated, non-force removal
   of only linked worktrees whose independent safety proofs all succeed.
+- **Repository override:** generation-scoped runtime state that runs one
+  repository's managed services, keyed by the Git top level of their declared
+  working directories, from another checkout of that repository.
