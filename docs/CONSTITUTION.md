@@ -105,17 +105,7 @@
 ### Kit-Managed Baseline Rules
 
 <!-- BEGIN KIT-MANAGED BASELINE RULES -->
-- Treat `docs/CONSTITUTION.md` as the canonical project contract.
-- Keep `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md` aligned with the repo-local docs tree.
-- Treat `docs/notes/<feature>` as optional source material, not canonical truth; promote durable decisions into `SPEC.md`, `docs/CONSTITUTION.md`, or durable references.
-- Use native agent planning for research, clarification, design, and implementation planning.
-- Before implementation, inspect code and repository memory; create or adopt `SPEC.md` when material rationale exists.
-- After validation, curate feature rationale, project invariants, reusable practices, and domain knowledge into their scope-appropriate canonical documents.
-- Allow a justified `not required` repository-memory decision when code and tests preserve the complete durable truth.
-- Keep every version-control-eligible handwritten implementation/source and test file at 300 physical lines or less.
-- Before delivery, audit the complete affected source/test scope; whole-project reconcile and scheduled maintenance audit the entire repository.
-- Exclude documentation files, all `docs/**`, all `.kit/**`, `.kit.yaml`, ignored files, vendored dependencies, and proven generated files.
-- Split oversized files by semantic responsibility while preserving stable public entry points and behavior; never use minification or arbitrary numbered chunks to claim compliance.
+- Kit's universal agent rules live in the Kit-managed block of `AGENTS.md` (rendered identically into `CLAUDE.md` and `.github/copilot-instructions.md`), and contextual rules live in `docs/references/rules/`. This Constitution records project-specific invariants and does not restate them.
 <!-- END KIT-MANAGED BASELINE RULES -->
 
 ## CHANGE CLASSIFICATION
