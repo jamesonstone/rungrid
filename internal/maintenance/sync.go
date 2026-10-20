@@ -64,20 +64,10 @@ func SyncRepositories(ctx context.Context, repositories []Repository, dryRun boo
 
 func syncRepository(ctx context.Context, repository Repository, dryRun bool, recoveryTimeout time.Duration, runner Runner, coordinator Coordinator) (SyncRepository, []Failure) {
 	result := SyncRepository{Name: repository.Name, Aliases: repository.Aliases, Remote: repository.Remote, State: "unavailable", Action: "preserved"}
-	branch, remoteOID, err := liveDefault(ctx, runner, repository)
-	if err != nil {
-		return result, []Failure{{Repository: repository.Name, Operation: "discover-default", Error: err.Error()}}
+	state, failure := InspectDefault(ctx, runner, repository, !dryRun)
+	if failure != nil {
+		return result, []Failure{*failure}
 	}
-	if !dryRun {
-		if _, err := git(ctx, runner, repository.TopLevel, "fetch", "--prune", repository.Remote); err != nil {
-			return result, []Failure{{Repository: repository.Name, Operation: "fetch", Error: err.Error()}}
-		}
-		branch, remoteOID, err = liveDefault(ctx, runner, repository)
-		if err != nil {
-			return result, []Failure{{Repository: repository.Name, Operation: "rediscover-default", Error: err.Error()}}
-		}
-	}
-	state := inspectDefault(ctx, runner, repository, branch, remoteOID)
 	result.DefaultBranch, result.LocalOID, result.RemoteOID = state.Branch, state.LocalOID, state.RemoteOID
 	result.Path, result.State, result.Detail = state.Path, state.State, state.Detail
 	if state.Path != "" {
@@ -142,6 +132,49 @@ func syncRepository(ctx context.Context, repository Repository, dryRun bool, rec
 		return result, []Failure{{Repository: repository.Name, Operation: "resume-services", Path: state.Path, Error: resumeErr.Error()}}
 	}
 	return result, nil
+}
+
+// DefaultCheckout is the classified local default branch of one repository.
+type DefaultCheckout = defaultState
+
+// InspectDefault discovers the live remote default branch, fetches and
+// rediscovers it when fetch is true, and classifies the local default branch.
+// It never changes a ref or a worktree.
+func InspectDefault(ctx context.Context, runner Runner, repository Repository, fetch bool) (DefaultCheckout, *Failure) {
+	if runner == nil {
+		runner = CommandRunner{}
+	}
+	branch, remoteOID, err := liveDefault(ctx, runner, repository)
+	if err != nil {
+		return defaultState{}, &Failure{Repository: repository.Name, Operation: "discover-default", Error: err.Error()}
+	}
+	if fetch {
+		if _, err := git(ctx, runner, repository.TopLevel, "fetch", "--prune", repository.Remote); err != nil {
+			return defaultState{}, &Failure{Repository: repository.Name, Operation: "fetch", Error: err.Error()}
+		}
+		branch, remoteOID, err = liveDefault(ctx, runner, repository)
+		if err != nil {
+			return defaultState{}, &Failure{Repository: repository.Name, Operation: "rediscover-default", Error: err.Error()}
+		}
+	}
+	return inspectDefault(ctx, runner, repository, branch, remoteOID), nil
+}
+
+// FastForward advances an inspected behind default branch with the same
+// expected-OID revalidation that sync uses.
+func FastForward(ctx context.Context, runner Runner, repository Repository, state DefaultCheckout) error {
+	if runner == nil {
+		runner = CommandRunner{}
+	}
+	return fastForward(ctx, runner, repository, state)
+}
+
+// CleanWorktree reports whether a worktree has no tracked or untracked change.
+func CleanWorktree(ctx context.Context, runner Runner, directory string) (bool, error) {
+	if runner == nil {
+		runner = CommandRunner{}
+	}
+	return cleanWorktree(ctx, runner, directory)
 }
 
 func fastForward(ctx context.Context, runner Runner, repository Repository, state defaultState) error {

@@ -116,6 +116,7 @@ type Service struct {
 	Terminal         ServiceTerminal   `yaml:"terminal,omitempty" json:"terminal"`
 	Ports            []int             `yaml:"ports,omitempty" json:"ports,omitempty"`
 	ResourceGuard    *ResourceGuard    `yaml:"resource_guard,omitempty" json:"resource_guard,omitempty"`
+	Refresh          *Refresh          `yaml:"refresh,omitempty" json:"refresh,omitempty"`
 }
 
 type Command struct {
