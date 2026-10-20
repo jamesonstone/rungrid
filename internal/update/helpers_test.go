@@ -62,10 +62,10 @@ func newFixture(t *testing.T) *fixture {
 	}
 	backend := &manifest.Service{Name: "backend", Source: "native", Run: &manifest.Run{Argv: []string{"go", "run", "."}},
 		Refresh: &manifest.Refresh{Steps: []manifest.RefreshStep{{Name: "migrate", Run: manifest.Command{Argv: []string{"make", "migrate"}}, Watch: []string{"migrations"}}}}}
-	frontend := &manifest.Service{Name: "frontend", Source: "native", Run: &manifest.Run{Argv: []string{"npm", "run", "start"}}}
+	frontend := &manifest.Service{Name: "frontend", Source: "native", Activation: "tab", Run: &manifest.Run{Argv: []string{"npm", "run", "start"}}}
 	coordinator := &fakeCoordinator{services: []Service{
-		{Config: backend, WorkingDirectory: filepath.Join(primary, "backend"), Running: true},
-		{Config: frontend, WorkingDirectory: filepath.Join(primary, "frontend"), Running: true},
+		{Config: backend, WorkingDirectory: filepath.Join(primary, "backend"), Running: true, RestartPath: RestartProcess},
+		{Config: frontend, WorkingDirectory: filepath.Join(primary, "frontend"), Running: true, RestartPath: RestartSession},
 	}}
 	return &fixture{t: t, primary: primary, writer: writer, layout: layout, coord: coordinator, exec: &fakeExecutor{}}
 }
@@ -84,10 +84,10 @@ func (f *fixture) repository() maintenance.Repository {
 
 func (f *fixture) run(options Options) Report {
 	f.t.Helper()
-	f.coord.paused, f.coord.resumed, f.exec.commands = nil, false, nil
+	f.coord.paused, f.coord.resumed, f.coord.restarted, f.exec.commands = nil, false, nil, nil
 	report, err := runRepositories(context.Background(), []maintenance.Repository{f.repository()}, nil, 0, options,
 		Dependencies{Layout: f.layout, Coordinator: f.coord, Executor: f.exec})
-	if err != nil && f.exec.fail == "" {
+	if err != nil && f.exec.fail == "" && f.coord.failPause == "" {
 		f.t.Fatalf("update failed: %v\n%+v", err, report)
 	}
 	return report
@@ -95,19 +95,49 @@ func (f *fixture) run(options Options) Report {
 
 func (f *fixture) head() string { return gitRun(f.t, f.primary, "rev-parse", "HEAD") }
 
+// fakeCoordinator models Process Compose state: running services, pauses
+// that can fail per service, and the resume order.
 type fakeCoordinator struct {
-	services []Service
-	paused   []string
-	resumed  bool
+	services  []Service
+	paused    []string
+	resumed   bool
+	restarted []string
+	failPause string
 }
 
 func (c *fakeCoordinator) Services(context.Context, string) ([]Service, error) {
 	return c.services, nil
 }
 
-func (c *fakeCoordinator) Pause(_ context.Context, names []string) (maintenance.ResumeFunc, error) {
-	c.paused = append(c.paused, names...)
-	return func(context.Context) error { c.resumed = true; return nil }, nil
+func (c *fakeCoordinator) Pause(_ context.Context, name string) (maintenance.ResumeFunc, error) {
+	if name == c.failPause {
+		return nil, errors.New("tab-owned service has no live owning session")
+	}
+	c.setRunning(name, false)
+	c.paused = append(c.paused, name)
+	return func(context.Context) error {
+		c.setRunning(name, true)
+		c.resumed = true
+		c.restarted = append(c.restarted, name)
+		return nil
+	}, nil
+}
+
+func (c *fakeCoordinator) setRunning(name string, running bool) {
+	for index := range c.services {
+		if c.services[index].Config.Name == name {
+			c.services[index].Running = running
+		}
+	}
+}
+
+func (c *fakeCoordinator) allRunning() bool {
+	for _, service := range c.services {
+		if !service.Running {
+			return false
+		}
+	}
+	return true
 }
 
 type fakeExecutor struct {
