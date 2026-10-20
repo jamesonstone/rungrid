@@ -1621,11 +1621,23 @@ no recorded fingerprint runs. A JavaScript install also runs when its
 `package.json` declares dependencies and `node_modules` is absent. A service
 with no recorded watch fingerprint compares against the pre-fast-forward commit.
 
-Apply order is: pause exactly the running services that need a restart
-(through Process Compose, with cooperative pause for tab sessions as in
-section 11.11), fast-forward with the expected-OID contract, run changed
-dependency installs and then changed steps in manifest order, and resume every
-paused service with a fresh bounded recovery context. Services that run from
+Each running service that needs a restart takes one of two restart paths,
+chosen when the plan is built and shown in the plan as `restart_path`. A
+tab-owned service with a live owning session uses `session`: the session
+cooperatively pauses and resumes the process and keeps its tab, ownership lock,
+and log view. Any other running service, including a tab-owned service whose
+session has ended while its process kept running, uses `process-compose`: the
+process stops and starts through Process Compose, preserving its unowned state.
+A resumed service is ready when its process runs and, when it has a health
+check, Process Compose reports it `Ready`. A session whose resumed process is
+not ready in time reports the failure and keeps the process and its ownership.
+
+Apply order is: pause each restarting service in reverse manifest order,
+fast-forward with the expected-OID contract, run changed dependency installs
+and then changed steps in manifest order, and resume every paused service in
+manifest order, each with its own fresh bounded recovery context. If any pause
+fails, every service already paused is restored, nothing else changes, and the
+repository reports FAILED. Services that run from
 override or selected feature worktrees are never considered. The first failed
 unit skips the repository's remaining units, and paused services still resume.
 Only succeeded units and completed restarts record new fingerprints, so the

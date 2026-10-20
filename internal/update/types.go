@@ -36,13 +36,25 @@ type Service struct {
 	Config           *manifest.Service
 	WorkingDirectory string
 	Running          bool
+	// RestartPath says how a running service restarts: RestartSession for a
+	// tab service with a live owning session, otherwise RestartProcess.
+	RestartPath string
 }
 
-// Coordinator maps services to worktrees and pauses exact running services
-// through the Process Compose lifecycle. Resume restarts what Pause stopped.
+const (
+	// RestartSession pauses and resumes through the owning session, which
+	// keeps the tab, its ownership lock, and its log view.
+	RestartSession = "session"
+	// RestartProcess stops and starts the process through Process Compose.
+	RestartProcess = "process-compose"
+)
+
+// Coordinator maps services to worktrees and pauses one exact running service
+// through the Process Compose lifecycle. The returned function restarts what
+// Pause stopped and waits until the service is ready again.
 type Coordinator interface {
 	Services(ctx context.Context, worktreePath string) ([]Service, error)
-	Pause(ctx context.Context, names []string) (maintenance.ResumeFunc, error)
+	Pause(ctx context.Context, name string) (maintenance.ResumeFunc, error)
 }
 
 // Command is one dependency install or refresh step.
@@ -96,10 +108,11 @@ type StepResult struct {
 }
 
 type ServiceResult struct {
-	Name    string `json:"name"`
-	Restart string `json:"restart"`
-	Status  string `json:"status"`
-	Reason  string `json:"reason"`
+	Name        string `json:"name"`
+	Restart     string `json:"restart"`
+	RestartPath string `json:"restart_path,omitempty"`
+	Status      string `json:"status"`
+	Reason      string `json:"reason"`
 }
 
 const (

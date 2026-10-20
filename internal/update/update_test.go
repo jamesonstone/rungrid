@@ -20,7 +20,7 @@ func TestFirstRunInstallsAndSecondRunIsNoOp(t *testing.T) {
 	if want := []string{"backend-migrate", "go-mod-download", "npm-ci"}; !reflect.DeepEqual(commands, want) {
 		t.Fatalf("first run commands = %v, want %v", commands, want)
 	}
-	if !reflect.DeepEqual(f.coord.paused, []string{"backend", "frontend"}) || !f.coord.resumed {
+	if !reflect.DeepEqual(f.coord.paused, []string{"frontend", "backend"}) || !reflect.DeepEqual(f.coord.restarted, []string{"backend", "frontend"}) {
 		t.Fatalf("first run paused %v resumed %v", f.coord.paused, f.coord.resumed)
 	}
 

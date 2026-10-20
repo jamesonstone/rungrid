@@ -91,7 +91,9 @@ branch with the `sync` contract, then runs `go mod download`, `npm ci` (or the
 pnpm/yarn equivalent), and each service's declared `refresh.steps` only when
 their inputs changed since the last successful run. It restarts only the
 running services those changes affect and leaves hot-reloading development
-servers running unless their dependencies changed. Dirty, ahead, or diverged
+servers running unless their dependencies changed. Tab-owned services restart
+through their live session, or through Process Compose when their session has
+ended. Dirty, ahead, or diverged
 checkouts are skipped with a reason. A second run with nothing new runs nothing
 and restarts nothing:
 
