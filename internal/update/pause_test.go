@@ -89,3 +89,21 @@ func TestDryRunNamesEachServiceRestartPath(t *testing.T) {
 		t.Fatalf("dry run paused %v", f.coord.paused)
 	}
 }
+
+func TestRecoveredRestartIsReportedAsUpdated(t *testing.T) {
+	f := newFixture(t)
+	f.run(Options{Baseline: true})
+	f.push("frontend/package-lock.json", `{"lockfileVersion":3}`+"\n")
+	f.coord.recover = "frontend"
+	result := f.run(Options{}).Repositories[0]
+	frontend := serviceStatus(t, result, "frontend")
+	if result.Status != StatusUpdated || frontend.Status != StatusUpdated {
+		t.Fatalf("repository %s, frontend %+v", result.Status, frontend)
+	}
+	if frontend.RestartPath != RestartProcess || !strings.Contains(frontend.Reason, "restarted through Process Compose") {
+		t.Fatalf("frontend did not report its fallback: %+v", frontend)
+	}
+	if again := f.run(Options{}).Repositories[0]; again.Status != StatusCurrent {
+		t.Fatalf("after a recovered restart the next run = %s", again.Status)
+	}
+}

@@ -25,6 +25,8 @@ type engine struct {
 	recoveryTimeout time.Duration
 	inputs          store
 	commandIndex    int
+	// recovered holds, per service, how a fallback restored it.
+	recovered map[string]string
 }
 
 // Run updates every selected repository. One repository's failure never
@@ -60,7 +62,7 @@ func runRepositories(ctx context.Context, repositories []maintenance.Repository,
 		report.FinishedAt = timestamp()
 		return report, err
 	}
-	run := &engine{options: options, deps: deps, recoveryTimeout: recoveryTimeout, inputs: inputs}
+	run := &engine{options: options, deps: deps, recoveryTimeout: recoveryTimeout, inputs: inputs, recovered: map[string]string{}}
 	for _, repository := range repositories {
 		result, repositoryFailures := run.repository(ctx, repository)
 		report.Repositories = append(report.Repositories, result)

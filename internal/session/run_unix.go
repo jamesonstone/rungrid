@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/jamesonstone/rungrid/internal/errs"
@@ -66,6 +65,7 @@ func Run(ctx context.Context, options Options) (returnErr error) {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	started, paused, resourcePaused := false, false, false
+	queued := &queuedStart{since: time.Now()}
 	lastIncidentID := ""
 	var pausedRequest maintenanceRequest
 	for {
@@ -176,6 +176,13 @@ func Run(ctx context.Context, options Options) (returnErr error) {
 			if getErr != nil {
 				continue
 			}
+			if action := queued.decide(options, current.Status, started, time.Now()); action == queueWait {
+				continue
+			} else if action != queueNone {
+				owned = false
+				_ = follower.stop()
+				return finishQueuedStart(action, options, client)
+			}
 			if isRunning(current.Status) {
 				started = true
 				continue
@@ -221,6 +228,11 @@ func validateSession(ctx context.Context, options Options) (*manifest.Service, e
 func pauseSession(ctx context.Context, options Options, client processcompose.Client, request maintenanceRequest) error {
 	stopContext, cancel := context.WithTimeout(ctx, options.Manifest.Runtime.ShutdownTimeout.Duration)
 	err := client.Stop(stopContext, options.Service)
+	if err == nil {
+		// Stop returns while the process is still terminating. Acknowledge the
+		// pause only once it has exited, so a quick resume is not rejected.
+		err = processcompose.WaitSettled(stopContext, client, options.Service, options.Manifest.Runtime.ShutdownTimeout.Duration)
+	}
 	cancel()
 	ackErr := acknowledgeMaintenance(options.Layout, request, "paused", err)
 	if err == nil {
@@ -230,7 +242,7 @@ func pauseSession(ctx context.Context, options Options, client processcompose.Cl
 }
 
 func resumeSession(ctx context.Context, options Options, client processcompose.Client, service *manifest.Service, request maintenanceRequest) (*logFollower, error) {
-	if err := client.Start(ctx, options.Service); err != nil {
+	if err := startPausedProcess(ctx, options, client); err != nil {
 		ackErr := acknowledgeMaintenance(options.Layout, request, "failed", err)
 		return nil, errors.Join(err, ackErr)
 	}
@@ -260,41 +272,9 @@ func resumeSession(ctx context.Context, options Options, client processcompose.C
 	return follower, nil
 }
 
-func waitForResumedService(ctx context.Context, options Options, client processcompose.Client, service *manifest.Service) error {
-	waitContext, cancel := context.WithTimeout(ctx, options.Manifest.Runtime.StartupTimeout.Duration)
-	defer cancel()
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		current, err := client.Get(waitContext, options.Service)
-		if err == nil {
-			status := strings.ToLower(current.Status)
-			healthy := service.Health == nil || processcompose.HealthReady(current.Health)
-			if healthy && (strings.Contains(status, "running") || strings.Contains(status, "healthy")) {
-				return nil
-			}
-		}
-		select {
-		case <-waitContext.Done():
-			return errs.Wrap(errs.ExitNotReady, "RG823", "resumed service did not report ready state: "+options.Service, waitContext.Err())
-		case <-ticker.C:
-		}
-	}
-}
-
 func requestExpired(request maintenanceRequest) bool {
 	expiresAt, err := time.Parse(time.RFC3339Nano, request.ExpiresAt)
 	return err != nil || time.Now().After(expiresAt)
-}
-
-func isRunning(status string) bool {
-	normalized := strings.ToLower(status)
-	return strings.Contains(normalized, "running") || strings.Contains(normalized, "launch") || strings.Contains(normalized, "pending")
-}
-
-func isTerminal(status string) bool {
-	normalized := strings.ToLower(status)
-	return strings.Contains(normalized, "complete") || strings.Contains(normalized, "stopped") || strings.Contains(normalized, "disabled") || strings.Contains(normalized, "error") || strings.Contains(normalized, "skipped")
 }
 
 func ClientFor(options Options) processcompose.Client {

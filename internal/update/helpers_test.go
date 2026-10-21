@@ -103,6 +103,8 @@ type fakeCoordinator struct {
 	resumed   bool
 	restarted []string
 	failPause string
+	// recover makes this service's resume succeed only through a fallback.
+	recover string
 }
 
 func (c *fakeCoordinator) Services(context.Context, string) ([]Service, error) {
@@ -119,6 +121,9 @@ func (c *fakeCoordinator) Pause(_ context.Context, name string) (maintenance.Res
 		c.setRunning(name, true)
 		c.resumed = true
 		c.restarted = append(c.restarted, name)
+		if name == c.recover {
+			return Recovered{Detail: "session resume failed (broken pipe); restarted through Process Compose"}
+		}
 		return nil
 	}, nil
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/jamesonstone/rungrid/internal/maintenance"
 	"github.com/jamesonstone/rungrid/internal/manifest"
 	"github.com/jamesonstone/rungrid/internal/override"
+	"github.com/jamesonstone/rungrid/internal/processcompose"
 	"github.com/jamesonstone/rungrid/internal/session"
 	"github.com/jamesonstone/rungrid/internal/supervisor"
 )
@@ -104,6 +105,9 @@ func (c *MaintenanceCoordinator) pauseServices(ctx context.Context, services []*
 		} else if stopErr := client.Stop(ctx, service.Name); stopErr != nil {
 			c.resumePausedAfterFailure(paused)
 			return nil, stopErr
+		} else if settleErr := processcompose.WaitSettled(ctx, client, service.Name, c.active.Manifest.Runtime.ShutdownTimeout.Duration); settleErr != nil {
+			c.resumePausedAfterFailure(paused)
+			return nil, settleErr
 		}
 		paused = append([]pausedMaintenanceService{item}, paused...)
 	}
