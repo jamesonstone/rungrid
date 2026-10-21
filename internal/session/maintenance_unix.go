@@ -63,6 +63,8 @@ func Pause(ctx context.Context, layout state.Layout, generationID, service strin
 	waitContext, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if err := handle.wait(waitContext, "paused"); err != nil {
+		// Withdraw the request so a late session does not act on it.
+		handle.remove()
 		return nil, err
 	}
 	return handle, nil
@@ -73,11 +75,9 @@ func (h *MaintenanceHandle) Resume(ctx context.Context) error {
 	if err := writeMaintenanceRequest(h.layout, h.request); err != nil {
 		return err
 	}
-	if err := h.wait(ctx, "running"); err != nil {
-		return err
-	}
+	err := h.wait(ctx, "running")
 	h.remove()
-	return nil
+	return err
 }
 
 func (h *MaintenanceHandle) wait(ctx context.Context, wanted string) error {
