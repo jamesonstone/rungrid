@@ -66,6 +66,7 @@ func Run(ctx context.Context, options Options) (returnErr error) {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	started, paused, resourcePaused := false, false, false
+	queued := &queuedStart{since: time.Now()}
 	lastIncidentID := ""
 	var pausedRequest maintenanceRequest
 	for {
@@ -176,6 +177,13 @@ func Run(ctx context.Context, options Options) (returnErr error) {
 			if getErr != nil {
 				continue
 			}
+			if action := queued.decide(options, current.Status, started, time.Now()); action == queueWait {
+				continue
+			} else if action != queueNone {
+				owned = false
+				_ = follower.stop()
+				return finishQueuedStart(action, options, client)
+			}
 			if isRunning(current.Status) {
 				started = true
 				continue
@@ -285,16 +293,6 @@ func waitForResumedService(ctx context.Context, options Options, client processc
 func requestExpired(request maintenanceRequest) bool {
 	expiresAt, err := time.Parse(time.RFC3339Nano, request.ExpiresAt)
 	return err != nil || time.Now().After(expiresAt)
-}
-
-func isRunning(status string) bool {
-	normalized := strings.ToLower(status)
-	return strings.Contains(normalized, "running") || strings.Contains(normalized, "launch") || strings.Contains(normalized, "pending")
-}
-
-func isTerminal(status string) bool {
-	normalized := strings.ToLower(status)
-	return strings.Contains(normalized, "complete") || strings.Contains(normalized, "stopped") || strings.Contains(normalized, "disabled") || strings.Contains(normalized, "error") || strings.Contains(normalized, "skipped")
 }
 
 func ClientFor(options Options) processcompose.Client {
