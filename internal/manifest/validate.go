@@ -171,6 +171,9 @@ func Validate(m *Manifest, root string) error {
 			}
 			validateResourceGuard(EffectiveResourceGuard(m.Runtime.ResourceGuard, *service.ResourceGuard), prefix+".resource_guard", add)
 		}
+		if service.Refresh != nil {
+			validateRefresh(service.Refresh, prefix+".refresh", add)
+		}
 		for portIndex, port := range service.Ports {
 			if port < 1 || port > 65535 {
 				add(fmt.Sprintf("%s.ports[%d]", prefix, portIndex), "must be between 1 and 65535")

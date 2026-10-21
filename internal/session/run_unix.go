@@ -241,6 +241,13 @@ func resumeSession(ctx context.Context, options Options, client processcompose.C
 	}
 	readyErr := waitForResumedService(ctx, options, client, service)
 	ackErr := acknowledgeMaintenance(options.Layout, request, "running", readyErr)
+	if readyErr != nil && ackErr == nil {
+		// The maintenance caller learns of the readiness failure through the
+		// acknowledgement. The session keeps the restarted process and its
+		// ownership so a slow start never turns into a stopped service.
+		_, _ = fmt.Fprintf(options.Stdout, "[rungrid] %s resumed but is not ready yet: %v\n", options.Service, readyErr)
+		return follower, nil
+	}
 	if readyErr != nil {
 		_ = follower.stop()
 		return nil, errors.Join(readyErr, ackErr)
@@ -262,7 +269,7 @@ func waitForResumedService(ctx context.Context, options Options, client processc
 		current, err := client.Get(waitContext, options.Service)
 		if err == nil {
 			status := strings.ToLower(current.Status)
-			healthy := service.Health == nil || strings.Contains(strings.ToLower(current.Health), "healthy")
+			healthy := service.Health == nil || processcompose.HealthReady(current.Health)
 			if healthy && (strings.Contains(status, "running") || strings.Contains(status, "healthy")) {
 				return nil
 			}

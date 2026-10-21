@@ -152,7 +152,7 @@ func waitForService(ctx context.Context, client processcompose.Client, layout st
 		if err == nil {
 			normalized := strings.ToLower(stateValue.Status)
 			if strings.Contains(normalized, "running") || strings.Contains(normalized, "healthy") {
-				if service.Health == nil || strings.Contains(strings.ToLower(stateValue.Health), "healthy") {
+				if service.Health == nil || processcompose.HealthReady(stateValue.Health) {
 					return nil
 				}
 			}

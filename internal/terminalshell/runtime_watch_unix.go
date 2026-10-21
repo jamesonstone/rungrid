@@ -43,14 +43,18 @@ func stopManagedShell(command *exec.Cmd, result <-chan error, reason string) err
 	if command.Process != nil {
 		_ = command.Process.Signal(syscall.SIGHUP)
 	}
+	// The shell's exit status after a requested hangup or kill is expected, so
+	// only whether it exited in time matters.
 	select {
-	case <-result:
+	case exitErr := <-result:
+		_ = exitErr
 		return nil
 	case <-time.After(3 * time.Second):
 		if command.Process != nil {
 			_ = command.Process.Kill()
 		}
-		<-result
+		exitErr := <-result
+		_ = exitErr
 		return errs.New(errs.ExitInterrupted, "RG1008", "managed zsh did not exit after "+reason)
 	}
 }
