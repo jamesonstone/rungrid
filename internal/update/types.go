@@ -57,6 +57,15 @@ type Coordinator interface {
 	Pause(ctx context.Context, name string) (maintenance.ResumeFunc, error)
 }
 
+// Recovered is returned by a ResumeFunc whose service is running again only
+// through a fallback, for example Process Compose after a failed session
+// restart. The engine reports it as a successful restart with this detail.
+type Recovered struct {
+	Detail string
+}
+
+func (r Recovered) Error() string { return r.Detail }
+
 // Command is one dependency install or refresh step.
 type Command struct {
 	Name             string

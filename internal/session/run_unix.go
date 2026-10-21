@@ -229,6 +229,11 @@ func validateSession(ctx context.Context, options Options) (*manifest.Service, e
 func pauseSession(ctx context.Context, options Options, client processcompose.Client, request maintenanceRequest) error {
 	stopContext, cancel := context.WithTimeout(ctx, options.Manifest.Runtime.ShutdownTimeout.Duration)
 	err := client.Stop(stopContext, options.Service)
+	if err == nil {
+		// Stop returns while the process is still terminating. Acknowledge the
+		// pause only once it has exited, so a quick resume is not rejected.
+		err = processcompose.WaitSettled(stopContext, client, options.Service, options.Manifest.Runtime.ShutdownTimeout.Duration)
+	}
 	cancel()
 	ackErr := acknowledgeMaintenance(options.Layout, request, "paused", err)
 	if err == nil {
@@ -238,7 +243,7 @@ func pauseSession(ctx context.Context, options Options, client processcompose.Cl
 }
 
 func resumeSession(ctx context.Context, options Options, client processcompose.Client, service *manifest.Service, request maintenanceRequest) (*logFollower, error) {
-	if err := client.Start(ctx, options.Service); err != nil {
+	if err := startPausedProcess(ctx, options, client); err != nil {
 		ackErr := acknowledgeMaintenance(options.Layout, request, "failed", err)
 		return nil, errors.Join(err, ackErr)
 	}
@@ -266,6 +271,20 @@ func resumeSession(ctx context.Context, options Options, client processcompose.C
 	}
 	_, _ = fmt.Fprintf(options.Stdout, "[rungrid] %s resumed after repository maintenance\n", options.Service)
 	return follower, nil
+}
+
+// startPausedProcess starts the paused process. A process that is already
+// running, for example after a maintenance caller restarted it through Process
+// Compose, is adopted rather than treated as a failure; a process still
+// terminating is waited out first.
+func startPausedProcess(ctx context.Context, options Options, client processcompose.Client) error {
+	if current, err := client.Get(ctx, options.Service); err == nil && isRunning(current.Status) {
+		return nil
+	}
+	if err := processcompose.WaitSettled(ctx, client, options.Service, options.Manifest.Runtime.ShutdownTimeout.Duration); err != nil {
+		return err
+	}
+	return client.Start(ctx, options.Service)
 }
 
 func waitForResumedService(ctx context.Context, options Options, client processcompose.Client, service *manifest.Service) error {
