@@ -19,6 +19,14 @@ references:
     read_policy: must
     used_for: sections 5.18 refresh and 11.24 update
     status: active
+  - id: github-issue-session-fallback
+    name: Session restart fallback issue
+    type: issue
+    target: https://github.com/jamesonstone/rungrid/issues/70
+    relation: implements
+    read_policy: must
+    used_for: Process Compose fallback after a failed session restart
+    status: active
   - id: github-issue-tab-services
     name: Tab-owned service restart issue
     type: issue
@@ -158,6 +166,12 @@ until all of that happens. `rungrid update` must be as safe to repeat as
   already paused before reporting FAILED with nothing changed. Each resume has
   its own recovery deadline, and one failed resume does not skip the others.
 
+- **Session restarts fall back to Process Compose (#70).** A failed or
+  unresponsive session pause, or a failed session resume, no longer ends the
+  restart. The service is stopped or adopted and started through Process
+  Compose, and the report names the fallback. The fallback is a small
+  state machine (`serviceRestart`) tested against a fake Process Compose.
+
 ## DISCOVERIES
 
 - `npm ci` on a package with no dependencies does not create `node_modules`.
@@ -175,6 +189,14 @@ until all of that happens. `rungrid update` must be as safe to repeat as
   `Completed`. This also affected `sync`. One `processcompose.HealthReady`
   predicate now serves all readiness checks, and `Not Ready` is no longer
   read as ready during `up`.
+- Process Compose `stop` returns at once and leaves the process `Terminating`
+  until its tree exits (seconds for `make` running Air), and a `start` sent in
+  that window returns HTTP 400 "already running". The session acknowledged a
+  pause right after the stop request, so a fast resume (no install to run) failed.
+  The session then left backend `Completed`, and worker, which depends on a
+  healthy backend, was `Skipped` (#70). Every pause now waits until the process
+  has settled, and every start waits for a settled process or adopts a running
+  one.
 - A session runs the binary that started its tab. Workspaces whose tabs were
   opened by an older build keep the old resume behavior until `down` and `up`.
 - A service whose working directory is the repository root watches the whole
@@ -217,6 +239,17 @@ until all of that happens. `rungrid update` must be as safe to repeat as
   all three through their sessions (1m40s, exit 0). The second run reported
   CURRENT everywhere with unchanged PIDs, and all 10 services stayed
   Running/Ready.
+- #70 smoke (Process Compose, a slow-stopping health-checked service with a
+  dependent): the merged build reproduced `start process returned HTTP 400`
+  with the services left `Completed` and `Skipped`. With the fix both
+  restarted through their sessions. With the session frozen (SIGSTOP) the pause
+  timed out, the restart fell back to Process Compose, the thawed session
+  stayed alive without stopping the process, and no maintenance files were
+  left.
+- #70 real workspace: after `down` and `up` on the fixed build, the pending
+  backend (session, Air) and worker (no session, Process Compose) restarts
+  that had failed both succeeded (exit 0, 18s). The second run was CURRENT
+  with unchanged PIDs, and all 10 services were Running/Ready.
 - #66 unit test: a pause failure restores the already-paused service, moves no
   ref, runs no unit, records nothing; the retry succeeds; the next run is
   CURRENT.

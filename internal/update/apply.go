@@ -2,6 +2,7 @@ package update
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jamesonstone/rungrid/internal/maintenance"
 )
@@ -62,6 +63,10 @@ func (e *engine) apply(ctx context.Context, repository maintenance.Repository, c
 		default:
 			inputs[service.watchKey] = service.watchPrint
 			changedAnything = changedAnything || service.restart
+			if detail, ok := e.recovered[service.name]; ok && service.restart {
+				service.result.RestartPath = RestartProcess
+				service.result.Reason = strings.TrimSuffix(service.result.Reason, "; restart through its tab session") + "; " + detail
+			}
 		}
 		result.Services = append(result.Services, service.result)
 	}
@@ -99,6 +104,8 @@ func (e *engine) pauseFailed(repository maintenance.Repository, checkout mainten
 		switch {
 		case service.name == failedName:
 			service.result.Status, service.result.Reason = StatusFailed, "could not be paused: "+pauseErr.Error()
+		case restoreErr == nil && e.recovered[service.name] != "":
+			service.result.Status, service.result.Reason = StatusSkipped, "not restarted: "+failedName+" could not be paused; "+e.recovered[service.name]
 		case restoreErr != nil:
 			service.result.Status, service.result.Reason = StatusFailed, "restore after pause failure failed: "+restoreErr.Error()
 			failures = append(failures, maintenance.Failure{Repository: repository.Name, Operation: "restore " + service.name, Path: checkout.Path, Error: restoreErr.Error()})

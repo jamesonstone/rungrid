@@ -2,6 +2,7 @@ package update
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jamesonstone/rungrid/internal/maintenance"
 )
@@ -41,10 +42,14 @@ func (e *engine) resumeAll(paused []pausedService) map[string]error {
 	failures := map[string]error{}
 	for _, item := range paused {
 		ctx, cancel := context.WithTimeout(context.Background(), e.recoveryTimeout)
-		if err := item.resume(ctx); err != nil {
+		err := item.resume(ctx)
+		cancel()
+		var recovered Recovered
+		if errors.As(err, &recovered) {
+			e.recovered[item.name] = recovered.Detail
+		} else if err != nil {
 			failures[item.name] = err
 		}
-		cancel()
 	}
 	return failures
 }
