@@ -841,6 +841,14 @@ The session command returns to the shell when `rungrid stop <service>` stops its
 process. The operator may then run the configured trigger to start a new session
 in the same tab.
 
+A start whose dependencies are not ready yet is queued: Process Compose keeps
+the tab process `Disabled` until they are, then starts it. The session keeps
+ownership through that wait, says once that it is waiting, and follows logs
+when the process starts. `Disabled` ends a session only after its process has
+run. If `rungrid stop <service>` is recorded while the start is still queued,
+the session waits up to the startup timeout for the queued start to launch,
+stops it, and returns to the shell, so a stopped service never starts unowned.
+
 ### 9.3 Start
 
 For a workspace-owned service, `rungrid start <service>` directly starts its

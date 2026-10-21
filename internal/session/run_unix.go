@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/jamesonstone/rungrid/internal/errs"
@@ -66,6 +65,7 @@ func Run(ctx context.Context, options Options) (returnErr error) {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	started, paused, resourcePaused := false, false, false
+	queued := &queuedStart{since: time.Now()}
 	lastIncidentID := ""
 	var pausedRequest maintenanceRequest
 	for {
@@ -176,6 +176,13 @@ func Run(ctx context.Context, options Options) (returnErr error) {
 			if getErr != nil {
 				continue
 			}
+			if action := queued.decide(options, current.Status, started, time.Now()); action == queueWait {
+				continue
+			} else if action != queueNone {
+				owned = false
+				_ = follower.stop()
+				return finishQueuedStart(action, options, client)
+			}
 			if isRunning(current.Status) {
 				started = true
 				continue
@@ -265,55 +272,9 @@ func resumeSession(ctx context.Context, options Options, client processcompose.C
 	return follower, nil
 }
 
-// startPausedProcess starts the paused process. A process that is already
-// running, for example after a maintenance caller restarted it through Process
-// Compose, is adopted rather than treated as a failure; a process still
-// terminating is waited out first.
-func startPausedProcess(ctx context.Context, options Options, client processcompose.Client) error {
-	if current, err := client.Get(ctx, options.Service); err == nil && isRunning(current.Status) {
-		return nil
-	}
-	if err := processcompose.WaitSettled(ctx, client, options.Service, options.Manifest.Runtime.ShutdownTimeout.Duration); err != nil {
-		return err
-	}
-	return client.Start(ctx, options.Service)
-}
-
-func waitForResumedService(ctx context.Context, options Options, client processcompose.Client, service *manifest.Service) error {
-	waitContext, cancel := context.WithTimeout(ctx, options.Manifest.Runtime.StartupTimeout.Duration)
-	defer cancel()
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		current, err := client.Get(waitContext, options.Service)
-		if err == nil {
-			status := strings.ToLower(current.Status)
-			healthy := service.Health == nil || processcompose.HealthReady(current.Health)
-			if healthy && (strings.Contains(status, "running") || strings.Contains(status, "healthy")) {
-				return nil
-			}
-		}
-		select {
-		case <-waitContext.Done():
-			return errs.Wrap(errs.ExitNotReady, "RG823", "resumed service did not report ready state: "+options.Service, waitContext.Err())
-		case <-ticker.C:
-		}
-	}
-}
-
 func requestExpired(request maintenanceRequest) bool {
 	expiresAt, err := time.Parse(time.RFC3339Nano, request.ExpiresAt)
 	return err != nil || time.Now().After(expiresAt)
-}
-
-func isRunning(status string) bool {
-	normalized := strings.ToLower(status)
-	return strings.Contains(normalized, "running") || strings.Contains(normalized, "launch") || strings.Contains(normalized, "pending")
-}
-
-func isTerminal(status string) bool {
-	normalized := strings.ToLower(status)
-	return strings.Contains(normalized, "complete") || strings.Contains(normalized, "stopped") || strings.Contains(normalized, "disabled") || strings.Contains(normalized, "error") || strings.Contains(normalized, "skipped")
 }
 
 func ClientFor(options Options) processcompose.Client {
