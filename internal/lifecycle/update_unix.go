@@ -5,9 +5,7 @@ package lifecycle
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"github.com/jamesonstone/rungrid/internal/errs"
 	"github.com/jamesonstone/rungrid/internal/processcompose"
 	"github.com/jamesonstone/rungrid/internal/session"
 
@@ -86,43 +84,23 @@ func (c *UpdateCoordinator) Pause(ctx context.Context, name string) (maintenance
 	if !exists {
 		return nil, fmt.Errorf("unknown service %s", name)
 	}
+	restart := serviceRestart{
+		name:         name,
+		process:      supervisor.Client(c.active.Layout, c.active.Runtime),
+		ready:        func(current processcompose.ProcessState) bool { return readyProcessState(service, current) },
+		stopTimeout:  c.active.Manifest.Runtime.ShutdownTimeout.Duration,
+		startTimeout: c.active.Manifest.Runtime.StartupTimeout.Duration,
+	}
 	if c.restartPath(service) == update.RestartSession {
-		handle, err := session.Pause(ctx, c.active.Layout, c.active.Runtime.GenerationID, name, c.active.Manifest.Runtime.ShutdownTimeout.Duration)
-		if err != nil {
-			return nil, err
-		}
-		return handle.Resume, nil
-	}
-	client := supervisor.Client(c.active.Layout, c.active.Runtime)
-	if err := stopForOverride(ctx, *c.active, client, name); err != nil {
-		return nil, err
-	}
-	return func(resumeContext context.Context) error {
-		if err := client.Start(resumeContext, name); err != nil {
-			return err
-		}
-		return waitForReadyProcess(resumeContext, client, service, c.active.Manifest.Runtime.StartupTimeout.Duration)
-	}, nil
-}
-
-// waitForReadyProcess waits for the process itself to run and, when it has a
-// health check, to report ready. Unlike waitForService it never accepts a live
-// tab shell as readiness, because the shell does not own this restart.
-func waitForReadyProcess(ctx context.Context, client processcompose.Client, service *manifest.Service, timeout time.Duration) error {
-	waitContext, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		if current, err := client.Get(waitContext, service.Name); err == nil && readyProcessState(service, current) {
-			return nil
-		}
-		select {
-		case <-waitContext.Done():
-			return errs.Wrap(errs.ExitNotReady, "RG1119", "service did not report ready state: "+service.Name, waitContext.Err())
-		case <-ticker.C:
+		restart.sessionPause = func(pauseContext context.Context) (func(context.Context) error, error) {
+			handle, err := session.Pause(pauseContext, c.active.Layout, c.active.Runtime.GenerationID, name, restart.stopTimeout)
+			if err != nil {
+				return nil, err
+			}
+			return handle.Resume, nil
 		}
 	}
+	return restart.pause(ctx)
 }
 
 var _ update.Coordinator = (*UpdateCoordinator)(nil)

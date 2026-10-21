@@ -1628,9 +1628,17 @@ cooperatively pauses and resumes the process and keeps its tab, ownership lock,
 and log view. Any other running service, including a tab-owned service whose
 session has ended while its process kept running, uses `process-compose`: the
 process stops and starts through Process Compose, preserving its unowned state.
-A resumed service is ready when its process runs and, when it has a health
-check, Process Compose reports it `Ready`. A session whose resumed process is
-not ready in time reports the failure and keeps the process and its ownership.
+A pause completes only after the process has exited, because a Process
+Compose stop returns while the process is still `Terminating` and a start sent
+then is rejected. If a session pause or resume fails, for example because the
+session is stale, unresponsive, or lost its runtime socket, Rungrid falls back
+to Process Compose. It stops the process, or adopts it if it is already
+running, starts it once it has settled, and reports the restart with the
+fallback named. A failed pause restores the service before the run reports
+FAILED. A resumed service is ready when its process runs and, when it has a
+health check, Process Compose reports it `Ready`. A session whose resumed
+process is not ready in time reports the failure and keeps the process and its
+ownership. A session that finds its process already running adopts it.
 
 Apply order is: pause each restarting service in reverse manifest order,
 fast-forward with the expected-OID contract, run changed dependency installs
