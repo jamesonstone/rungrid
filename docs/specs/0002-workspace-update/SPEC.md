@@ -19,6 +19,14 @@ references:
     read_policy: must
     used_for: sections 5.18 refresh and 11.24 update
     status: active
+  - id: github-issue-tab-services
+    name: Tab-owned service restart issue
+    type: issue
+    target: https://github.com/jamesonstone/rungrid/issues/66
+    relation: implements
+    read_policy: must
+    used_for: tab-owned restart paths and pause rollback
+    status: active
   - id: github-issue
     name: In-place workspace update issue
     type: issue
@@ -139,12 +147,36 @@ until all of that happens. `rungrid update` must be as safe to repeat as
 - **Compose defaults are conservative.** Compose services install nothing and
   watch only their Compose file.
 
+- **Two restart paths, chosen at plan time (#66).** A tab service with a live
+  session restarts through that session, which keeps the tab and its log view.
+  A running tab service whose session ended restarts through Process Compose,
+  which is its current state. The planner records the path, so the dry run
+  predicts how each service restarts. Refusing such a service was rejected:
+  it is the normal state after a Warp tab closes or a session exits.
+- **Pause one service at a time and roll back (#66).** The engine pauses in
+  reverse manifest order and, if one pause fails, restores every service it
+  already paused before reporting FAILED with nothing changed. Each resume has
+  its own recovery deadline, and one failed resume does not skip the others.
+
 ## DISCOVERIES
 
 - `npm ci` on a package with no dependencies does not create `node_modules`.
   An unconditional "node_modules missing" rule therefore reran `npm ci` on
   every run. The rule now applies only when `package.json` declares
   dependencies. Found by the headless smoke.
+- On a real Warp workspace a tab service can run with only its managed tab
+  shell and no session registration. The first release paused all services
+  through one coordinator call that required a session, so one such service
+  failed the whole repository (#66).
+- Process Compose reports readiness as `Ready`, but the session resume check
+  and `waitForService` required the word `healthy`. A resumed service with a
+  health check therefore never became ready. After the startup timeout the
+  session failed the resume and stopped the process, so the frontend ended
+  `Completed`. This also affected `sync`. One `processcompose.HealthReady`
+  predicate now serves all readiness checks, and `Not Ready` is no longer
+  read as ready during `up`.
+- A session runs the binary that started its tab. Workspaces whose tabs were
+  opened by an older build keep the old resume behavior until `down` and `up`.
 - A service whose working directory is the repository root watches the whole
   repository by default, so any merge restarts it. Such services should
   declare `refresh.watch`.
@@ -175,6 +207,19 @@ until all of that happens. `rungrid update` must be as safe to repeat as
   only `npm ci` and restarted only web; reruns were CURRENT.
 - Read-only `rungrid update --dry-run` against a real running workspace
   produced the expected plan without fetching or writing state.
+- #66 smoke (Process Compose, three tab services: two with live sessions, one
+  whose session was killed): the merged build reproduced the pause failure.
+  The fix restarted all three, kept both sessions alive, and a repeat run was
+  CURRENT. A dry run reported `session` and `process-compose` paths correctly.
+- #66 real workspace (10 services, 3 tab sessions): after `down` and `up` on
+  the fixed build, the dry run predicted session restarts for backend, worker,
+  and frontend. The real run installed Go and npm dependencies and restarted
+  all three through their sessions (1m40s, exit 0). The second run reported
+  CURRENT everywhere with unchanged PIDs, and all 10 services stayed
+  Running/Ready.
+- #66 unit test: a pause failure restores the already-paused service, moves no
+  ref, runs no unit, records nothing; the retry succeeds; the next run is
+  CURRENT.
 
 ## OUTCOME
 

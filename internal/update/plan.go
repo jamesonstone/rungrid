@@ -155,9 +155,9 @@ func planService(root string, service Service, units []*unit, target, previous t
 	reason := ""
 	switch {
 	case dependenciesRan:
-		reason = "dependency install ran"
+		reason = "dependency install"
 	case stepRan:
-		reason = "refresh step ran"
+		reason = "refresh step"
 	case item.watchChanged:
 		reason = "watched paths changed"
 	}
@@ -171,9 +171,20 @@ func planService(root string, service Service, units []*unit, target, previous t
 		item.result.Status, item.result.Reason = StatusSkipped, reason+"; service is not running"
 	default:
 		item.restart = true
-		item.result.Status, item.result.Reason = StatusUpdated, reason+"; restart"
+		item.result.RestartPath = service.RestartPath
+		item.result.Status, item.result.Reason = StatusUpdated, reason+"; "+restartDescription(service)
 	}
 	return item
+}
+
+func restartDescription(service Service) string {
+	if service.RestartPath == RestartSession {
+		return "restart through its tab session"
+	}
+	if service.Config.Activation == "tab" {
+		return "restart through Process Compose (no live tab session)"
+	}
+	return "restart through Process Compose"
 }
 
 func serviceBase(root, workingDirectory string) string {

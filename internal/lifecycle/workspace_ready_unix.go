@@ -58,6 +58,5 @@ func readyProcessState(service *manifest.Service, current processcompose.Process
 	if service.Health == nil {
 		return true
 	}
-	health := strings.ToLower(current.Health)
-	return strings.Contains(health, "ready") || strings.Contains(health, "healthy")
+	return processcompose.HealthReady(current.Health)
 }
