@@ -563,6 +563,49 @@ Policies are `no`, `always`, and `on-failure`. Tab-owned processes default to
 `no` so a stopped tab returns control to its shell. Workspace-owned native
 services default to `on-failure` with bounded retries.
 
+### 5.18 Refresh
+
+```yaml
+refresh:
+  restart: changed
+  watch: [cmd, internal, "**/*.sql"]
+  dependencies: auto
+  steps:
+    - name: migrate
+      run:
+        argv: [make, migrate]
+      watch: [migrations]
+      timeout: 5m
+```
+
+`refresh` is optional and is read only by `rungrid update` (section 11.24).
+`restart` is `changed`, `dependencies`, or `never`. `changed` restarts a running
+service when a watched path, one of its dependency installs, or one of its
+steps changed. `dependencies` restarts only after a dependency install, for
+development servers that apply source changes themselves. `never` reports the
+change without a restart. When `restart` is omitted, Rungrid selects
+`dependencies` for a recognized hot-reloading server (for example Expo, Metro,
+Vite, `next dev`, `webpack serve`, nodemon, or air, matched in `run.argv` or
+in the `package.json` script that `npm`, `pnpm`, `yarn`, or `bun` invokes) and
+`changed` otherwise.
+
+`watch` entries are service-relative slash paths. A literal entry matches that
+file or everything below that directory; an entry with `*`, `?`, or `[...]` is
+a glob over whole paths in which `**` spans any number of directories. Entries
+must not be absolute or leave the working directory. The default is the working
+directory, or only the Compose file for a Compose service.
+
+`dependencies` is `auto` or `none`. `auto` detects, at or above the native
+service's working directory and within its repository, the nearest Go module
+(`go mod download`, inputs `go.mod` and `go.sum`) and the nearest JavaScript
+lockfile: `package-lock.json` or `npm-shrinkwrap.json` (`npm ci`),
+`pnpm-lock.yaml` (`pnpm install --frozen-lockfile`), or `yarn.lock` (`yarn
+install --frozen-lockfile`, or `--immutable` beside `.yarnrc.yml`), with
+`package.json` as an additional input. Compose and external services never
+install dependencies. Each step requires a unique name, an argument vector, and
+at least one watched path; its timeout defaults to `10m`. Steps run in the
+service working directory with the service environment.
+
 ## 6. Project state and generated artifacts
 
 Rungrid follows XDG conventions. The effective state root is:
@@ -605,6 +648,8 @@ current
 sessions/
 tabs/
 locks/
+update/inputs.json
+lifecycle-logs/update/
 ```
 
 `current` identifies the active generation without embedding the checkout's
@@ -1554,6 +1599,68 @@ Diagnostics:
 | `RG1823` | the service does not run from a Git checkout |
 | `RG1824` | the runtime changed while waiting for the lifecycle lock |
 
+### 11.24 update
+
+```text
+rungrid update [--repository <name>]... [--dry-run | --baseline] [--json]
+```
+
+Brings a workspace up to date in place, without `down` and `up`, and works
+with or without an active runtime. For each selected repository it applies the
+section 11.11 inspection: fetch and prune the configured remote, then classify
+the local default branch. Missing, ahead, diverged, dirty, or unavailable
+branches are skipped with the exact reason and nothing in them runs. A
+checked-out default branch must be clean even when it is already current. A
+default branch that no worktree checks out advances only its ref.
+
+Rungrid then fingerprints the target commit's committed content: every
+detected dependency install's inputs, every `refresh.steps` entry's watched
+paths, and every service's `refresh.watch` paths (section 5.18). It compares
+them with the fingerprints recorded after the last successful run. A unit with
+no recorded fingerprint runs. A JavaScript install also runs when its
+`package.json` declares dependencies and `node_modules` is absent. A service
+with no recorded watch fingerprint compares against the pre-fast-forward commit.
+
+Each running service that needs a restart takes one of two restart paths,
+chosen when the plan is built and shown in the plan as `restart_path`. A
+tab-owned service with a live owning session uses `session`: the session
+cooperatively pauses and resumes the process and keeps its tab, ownership lock,
+and log view. Any other running service, including a tab-owned service whose
+session has ended while its process kept running, uses `process-compose`: the
+process stops and starts through Process Compose, preserving its unowned state.
+A resumed service is ready when its process runs and, when it has a health
+check, Process Compose reports it `Ready`. A session whose resumed process is
+not ready in time reports the failure and keeps the process and its ownership.
+
+Apply order is: pause each restarting service in reverse manifest order,
+fast-forward with the expected-OID contract, run changed dependency installs
+and then changed steps in manifest order, and resume every paused service in
+manifest order, each with its own fresh bounded recovery context. If any pause
+fails, every service already paused is restored, nothing else changes, and the
+repository reports FAILED. Services that run from
+override or selected feature worktrees are never considered. The first failed
+unit skips the repository's remaining units, and paused services still resume.
+Only succeeded units and completed restarts record new fingerprints, so the
+next run retries a failure and a run with no new input executes nothing and
+restarts nothing. Commands use the lifecycle-hook executor and write private
+redacted logs under `lifecycle-logs/update/`. Repositories are independent;
+any failure returns the typed partial status.
+
+Every repository, unit, and service reports `UPDATED`, `CURRENT`, `SKIPPED`
+with a reason, or `FAILED`. `--dry-run` never fetches, writes refs or state,
+runs commands, or pauses processes; it plans against locally available remote
+objects and otherwise reports `would-fetch`. `--baseline` records the checked-out
+default commit's current fingerprints as up to date without fetching, running,
+or restarting, for adopting an already-prepared workspace. Apply holds the
+project maintenance lock. JSON output uses kind `WorkspaceUpdateReport`.
+
+| Code | Meaning |
+| --- | --- |
+| `RG1901` | update input state could not be read |
+| `RG1902` | update input state is invalid |
+| `RG1903` | the update completed with at least one failure |
+| `RG1904` | `--dry-run` and `--baseline` were both given |
+
 ## 12. Machine-readable output
 
 JSON-capable commands emit one envelope:
@@ -1575,6 +1682,7 @@ existing field meaning may not change.
 Diagnostics have stable codes, severity, summary, optional field path, and a
 redacted detail. Human and JSON modes share codes.
 
+`rungrid update` uses kind `WorkspaceUpdateReport`, described in section 11.24.
 Repository overrides use kinds `OverrideReport` and `OverrideList`, described in
 section 11.23. `Up` data also carries the generation's `overrides`, and
 `status` service entries carry an `override` object with repository, path, and

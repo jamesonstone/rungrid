@@ -137,6 +137,27 @@ func Schema() []byte {
         "environment": {"$ref": "#/$defs/environment"}
       }
     },
+    "refresh_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "run", "watch"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+        "run": {"$ref": "#/$defs/command"},
+        "watch": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "timeout": {"type": "string"}
+      }
+    },
+    "refresh": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "restart": {"enum": ["changed", "dependencies", "never"]},
+        "watch": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "dependencies": {"enum": ["auto", "none"]},
+        "steps": {"type": "array", "items": {"$ref": "#/$defs/refresh_step"}}
+      }
+    },
     "lifecycle": {
       "type": "object",
       "additionalProperties": false,
@@ -205,6 +226,7 @@ func Schema() []byte {
           }
         },
 		"resource_guard": {"$ref": "#/$defs/resource_guard"},
+        "refresh": {"$ref": "#/$defs/refresh"},
         "namespace": {"type": "string"},
         "terminal": {
           "type": "object",

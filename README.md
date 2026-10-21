@@ -85,6 +85,24 @@ rungrid sync --dry-run
 rungrid sync
 ```
 
+Bring a running workspace up to date in place after pull requests merge,
+without `rungrid down` and `rungrid up`. `update` fast-forwards each default
+branch with the `sync` contract, then runs `go mod download`, `npm ci` (or the
+pnpm/yarn equivalent), and each service's declared `refresh.steps` only when
+their inputs changed since the last successful run. It restarts only the
+running services those changes affect and leaves hot-reloading development
+servers running unless their dependencies changed. Tab-owned services restart
+through their live session, or through Process Compose when their session has
+ended. Dirty, ahead, or diverged
+checkouts are skipped with a reason. A second run with nothing new runs nothing
+and restarts nothing:
+
+```sh
+rungrid update --dry-run
+rungrid update
+rungrid update --baseline   # adopt the current checkout as up to date
+```
+
 Preview and then reclaim clean linked worktrees whose pull requests merged and
 whose remote branches were deleted:
 
@@ -217,6 +235,14 @@ services:
       trigger_argv: [make, dev]
     depends_on:
       database: running
+    refresh:
+      restart: changed
+      watch: [cmd, internal, go.mod, go.sum]
+      steps:
+        - name: migrate
+          run:
+            argv: [make, migrate]
+          watch: [migrations]
 ```
 
 `workspace.root` is relative to the manifest directory and may include sibling
@@ -230,6 +256,18 @@ an exclusive `rungrid session` owns them. External services are readiness
 dependencies only and are never directly started or stopped by service
 commands.
 
+The optional per-service `refresh` block tunes `rungrid update`. `restart` is
+`changed` (restart when a watched path, dependency, or step changed),
+`dependencies` (restart only when dependencies were reinstalled, for
+hot-reloading servers), or `never`. When omitted, Rungrid detects common
+hot-reloading servers such as Expo, Metro, Vite, `next dev`, nodemon, and air
+from `run.argv` and the `package.json` script it invokes. `watch` lists
+service-relative paths or globs (`**` spans directories) and defaults to the
+working directory, or to the Compose file for a Compose service.
+`dependencies: none` disables Go and JavaScript install detection. Each step
+runs with the service environment only when one of its watched paths changed.
+Input fingerprints live in project state at `update/inputs.json`.
+
 The complete product and safety contract is [CLI_SPEC.md](CLI_SPEC.md). Durable
 implementation rationale lives in
 [docs/specs/rungrid-v1/SPEC.md](docs/specs/rungrid-v1/SPEC.md), with repository
@@ -237,13 +275,15 @@ maintenance decisions in
 [docs/specs/repository-maintenance/SPEC.md](docs/specs/repository-maintenance/SPEC.md),
 filesystem reconciliation in
 [docs/specs/repository-reconcile/SPEC.md](docs/specs/repository-reconcile/SPEC.md),
+in-place workspace updates in
+[docs/specs/0002-workspace-update/SPEC.md](docs/specs/0002-workspace-update/SPEC.md),
 and repository overrides in
 [docs/specs/worktree-overrides/SPEC.md](docs/specs/worktree-overrides/SPEC.md).
 
 ## Commands
 
 Rungrid v1 provides `init`, `doctor`, `plan`, `generate`, `up`, `open`,
-`attach`, `versions`, `status`, `logs`, `sync`, `reconcile`, `worktrees`,
+`attach`, `versions`, `status`, `logs`, `sync`, `update`, `reconcile`, `worktrees`,
 `resume`, `session`, `start`, `stop`, `override` (and the `rungrid <service>
 [worktree]` shortcut), `down`, `uninstall`, `config`, `instructions`
 (alias `agent-start`), `completion`, and `version`. Every JSON-capable command

@@ -81,6 +81,13 @@ func (c *MaintenanceCoordinator) Pause(ctx context.Context, worktreePath string)
 	if err != nil || len(services) == 0 {
 		return nil, func(context.Context) error { return nil }, err
 	}
+	resume, err := c.pauseServices(ctx, services)
+	return serviceNames(services), resume, err
+}
+
+// pauseServices stops the exact services in reverse order, cooperatively
+// pausing tab sessions, and returns the function that restarts them.
+func (c *MaintenanceCoordinator) pauseServices(ctx context.Context, services []*manifest.Service) (maintenance.ResumeFunc, error) {
 	paused := make([]pausedMaintenanceService, 0, len(services))
 	client := supervisor.Client(c.active.Layout, c.active.Runtime)
 	for index := len(services) - 1; index >= 0; index-- {
@@ -91,16 +98,16 @@ func (c *MaintenanceCoordinator) Pause(ctx context.Context, worktreePath string)
 			handle, pauseErr := session.Pause(ctx, c.active.Layout, c.active.Runtime.GenerationID, service.Name, timeout)
 			if pauseErr != nil {
 				c.resumePausedAfterFailure(paused)
-				return serviceNames(services), nil, pauseErr
+				return nil, pauseErr
 			}
 			item.handle = handle
 		} else if stopErr := client.Stop(ctx, service.Name); stopErr != nil {
 			c.resumePausedAfterFailure(paused)
-			return serviceNames(services), nil, stopErr
+			return nil, stopErr
 		}
 		paused = append([]pausedMaintenanceService{item}, paused...)
 	}
-	return serviceNames(services), func(resumeContext context.Context) error {
+	return func(resumeContext context.Context) error {
 		return c.resume(resumeContext, paused)
 	}, nil
 }
