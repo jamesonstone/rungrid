@@ -30,7 +30,7 @@ func (w *worker) observeControlClients(ctx context.Context, now time.Time, snaps
 		candidate, candidateErr := buildControlCandidate(snapshot, registration, w.hostMemory)
 		if candidateErr != nil {
 			w.controlBreaches[registration.PID] = 0
-			if controlClientRegistrationStale(snapshot, registration) {
+			if controlClientRegistrationStale(registration) {
 				_ = guardstate.RemoveControlClient(w.layout, registration)
 			}
 			continue
@@ -58,9 +58,12 @@ func (w *worker) observeControlClients(ctx context.Context, now time.Time, snaps
 	return nil
 }
 
-func controlClientRegistrationStale(snapshot processSnapshot, registration guardstate.ControlClient) bool {
-	process, exists := snapshot[registration.PID]
-	return !exists || process.StartIdentity != registration.ProcessIdentity
+// controlClientRegistrationStale asks about the exact process. The snapshot
+// cannot answer: it predates any client that started after it was captured,
+// and removing a live client's record hides it from window detection and from
+// the guard's own limits.
+func controlClientRegistrationStale(registration guardstate.ControlClient) bool {
+	return !procidentity.Matches(registration.PID, registration.ProcessIdentity)
 }
 
 func (w *worker) containControlClient(

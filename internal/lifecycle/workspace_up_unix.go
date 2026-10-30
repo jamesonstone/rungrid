@@ -186,17 +186,28 @@ func finishUp(
 	if err != nil {
 		return UpResult{}, err
 	}
-	opened := false
+	opened, windowsKept := false, false
 	shouldOpen := options.Open && !options.Headless && loaded.Manifest.Terminal.Mode == "warp"
 	if shouldOpen {
 		record, installErr := warp.Install(layout, &loaded.Manifest, runtimeState.GenerationID, rungridExecutable)
 		if installErr != nil {
 			return UpResult{}, installErr
 		}
-		if openErr := warp.Open(ctx, record, ""); openErr != nil {
+		live, absent, liveErr := windowsLive(layout, &loaded.Manifest, runtimeState, options.Requested)
+		if liveErr != nil {
+			return UpResult{}, liveErr
+		}
+		plan := planUpOpen(upOpenInput{Reused: reused, WindowsLive: live, AbsentTabs: absent})
+		var openErr error
+		if opened, openErr = openUpWindows(ctx, record, plan); openErr != nil {
 			return UpResult{}, openErr
 		}
-		opened = true
+		if plan.Workspace {
+			if recordErr := recordWindowOpen(layout, runtimeState, time.Now()); recordErr != nil {
+				return UpResult{}, recordErr
+			}
+		}
+		windowsKept = reused && live
 	}
 	for _, name := range options.Requested {
 		service, _ := manifest.FindService(&loaded.Manifest, name)
@@ -209,7 +220,7 @@ func finishUp(
 	}
 	return UpResult{
 		Generation: runtimeState.GenerationID, RuntimePID: runtimeState.PID,
-		Socket: runtimeState.Socket, Reused: reused, OpenedWarp: opened,
+		Socket: runtimeState.Socket, Reused: reused, OpenedWarp: opened, WarpLive: windowsKept,
 	}, nil
 }
 

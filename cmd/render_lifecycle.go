@@ -48,6 +48,8 @@ func summarizeUp(w io.Writer, style present.Style, result lifecycle.UpResult) {
 	_ = style.Result(w, present.GlyphOK, detail)
 	if result.OpenedWarp {
 		_ = style.Note(w, present.GlyphStep, "opened the Warp workspace")
+	} else if result.WarpLive {
+		_ = style.Note(w, present.GlyphStep, "Warp workspace already open; run rungrid open for another window")
 	}
 }
 

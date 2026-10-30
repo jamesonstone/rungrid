@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jamesonstone/rungrid/internal/errs"
@@ -71,11 +72,22 @@ func Logs(ctx context.Context, active Active, services []string, follow bool, ta
 }
 
 func Attach(ctx context.Context, active Active, readOnly bool, stdin io.Reader, stdout, stderr io.Writer) error {
-	command := supervisor.Client(active.Layout, active.Runtime).AttachCommand(ctx, readOnly, stdin, stdout, stderr)
-	if err := runRegisteredStream(active, command, "attach", ""); err != nil {
-		return errs.Wrap(errs.ExitFailure, "RG1116", "attach Process Compose TUI", err)
-	}
-	return nil
+	attachContext, cancel := context.WithCancel(ctx)
+	defer cancel()
+	command := supervisor.Client(active.Layout, active.Runtime).AttachCommand(attachContext, readOnly, stdin, stdout, stderr)
+	command.Cancel = func() error { return command.Process.Signal(syscall.SIGTERM) }
+	command.WaitDelay = attachStopDelay
+	go func() {
+		ended := watchRuntimeEnd(attachContext, attachPollInterval, func() bool {
+			return RuntimeActive(active.Layout, active.Runtime)
+		})
+		if ended {
+			cancel()
+		}
+	}()
+	err := runRegisteredStream(active, command, "attach", "")
+	return attachResult(err, err != nil && RuntimeActive(active.Layout, active.Runtime))
+
 }
 
 func runRegisteredStream(active Active, command *exec.Cmd, operation, service string) error {
