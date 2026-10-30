@@ -41,6 +41,8 @@ type UpResult struct {
 	Socket     string `json:"socket"`
 	Reused     bool   `json:"reused"`
 	OpenedWarp bool   `json:"opened_warp"`
+	// WarpLive is true when a reused runtime's windows were already open.
+	WarpLive bool `json:"warp_live"`
 }
 
 type ServiceStatus struct {

@@ -3,7 +3,6 @@ package cmd
 import (
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -128,11 +127,7 @@ func watchVersionsWhileRuntimeActive(
 }
 
 func versionsRuntimeActive(layout state.Layout, runtimeState supervisor.Runtime) bool {
-	marker := filepath.Join(layout.ProjectDir, "locks", "down-"+runtimeState.GenerationID+".json")
-	if _, err := os.Lstat(marker); err == nil || !os.IsNotExist(err) {
-		return false
-	}
-	return supervisor.StaticScopeMatches(layout, runtimeState)
+	return lifecycle.RuntimeActive(layout, runtimeState)
 }
 
 func newStatusCommand(opt *options) *cobra.Command {

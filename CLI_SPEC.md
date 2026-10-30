@@ -799,7 +799,8 @@ identity mismatch remains a fail-closed conflict.
    and leftover overrides, then records the validated overrides, so no
    service starts from the wrong checkout;
 7. waits for workspace-owned services and external dependencies;
-8. opens the ordered Warp workspace unless headless or explicitly disabled;
+8. opens the ordered Warp workspace unless headless, explicitly disabled, or
+   already live for a reused runtime;
 9. waits for requested tab-owned services to report a lifecycle state;
 10. records `active` and prints a stable summary.
 
@@ -1130,7 +1131,9 @@ rungrid up [service ...] [--headless] [--no-open] [--override <repository|servic
 ```
 
 Starts or reuses the workspace runtime, waits for workspace activation, and
-opens Warp unless disabled. It runs prerequisites and rollback according to the
+opens Warp unless disabled. A reused runtime whose window is live, or opened in
+the last 90 seconds, opens no new window, only requested service tabs that are
+absent; `rungrid open` opens another on request. It runs prerequisites and rollback according to the
 lifecycle contract. Optional service arguments identify tab services whose
 lifecycle state must be observed before success.
 
@@ -1156,7 +1159,9 @@ rungrid attach [--read-only]
 
 Attaches to the active Process Compose TUI over the verified socket. The
 default is read-only. A mutable attachment requires an explicit flag and clear
-warning because it can compete with tab ownership.
+warning because it can compete with tab ownership. It ends with the exact
+runtime it attached to and never reconnects to a later one, so `rungrid down`
+followed by `rungrid up` leaves no client behind.
 
 ### 11.8 versions
 
